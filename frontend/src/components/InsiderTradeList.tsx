@@ -30,7 +30,7 @@ export function InsiderTradeList({ trades, showTicker = false }: InsiderTradeLis
   if (trades.length === 0) {
     return (
       <div className="py-6 text-center text-gray-500">
-        Nenhuma negociação de insider encontrada
+        Nenhuma negociação encontrada
       </div>
     );
   }

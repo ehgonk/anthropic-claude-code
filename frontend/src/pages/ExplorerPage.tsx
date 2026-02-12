@@ -1,9 +1,9 @@
 /**
  * Página Explorer — análise detalhada de um ativo específico.
- * Gráfico de preço + insiders overlay + score gauge + breakdown.
+ * Gráfico de preço + trades overlay + score gauge + breakdown.
  */
 
-import { LineChart, RefreshCw } from "lucide-react";
+import { BarChart2, CandlestickChart, LineChart, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { InsiderTradeList } from "../components/InsiderTradeList";
@@ -12,12 +12,58 @@ import { ScoreBreakdown } from "../components/ScoreBreakdown";
 import { ScoreGauge } from "../components/ScoreGauge";
 import { SearchBar } from "../components/SearchBar";
 import { useApi } from "../hooks/useApi";
-import { api, type DashboardData } from "../services/api";
+import { api, type DashboardData, type StockPrice } from "../services/api";
+
+type ChartType = "line" | "candlestick";
+type Periodicity = "daily" | "weekly" | "monthly" | "yearly";
+
+function aggregateByPeriod(prices: StockPrice[], period: Periodicity): StockPrice[] {
+  if (period === "daily") return prices;
+
+  const groups = new Map<string, StockPrice[]>();
+
+  for (const p of prices) {
+    const d = new Date(p.trade_date + "T12:00:00");
+    let key: string;
+
+    switch (period) {
+      case "weekly": {
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(d);
+        monday.setDate(diff);
+        key = monday.toISOString().slice(0, 10);
+        break;
+      }
+      case "monthly":
+        key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        break;
+      case "yearly":
+        key = `${d.getFullYear()}`;
+        break;
+    }
+
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(p);
+  }
+
+  return Array.from(groups.entries()).map(([, group]) => ({
+    trade_date: group[group.length - 1].trade_date,
+    open_price: group[0].open_price,
+    high_price: Math.max(...group.map((g) => g.high_price)),
+    low_price: Math.min(...group.map((g) => g.low_price)),
+    close_price: group[group.length - 1].close_price,
+    volume: group.reduce((sum, g) => sum + g.volume, 0),
+    num_trades: group.reduce((sum, g) => sum + g.num_trades, 0),
+  }));
+}
 
 export function ExplorerPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [ticker, setTicker] = useState(searchParams.get("ticker") || "");
   const [days, setDays] = useState(180);
+  const [chartType, setChartType] = useState<ChartType>("line");
+  const [periodicity, setPeriodicity] = useState<Periodicity>("daily");
 
   const { data, loading, error, refetch } = useApi(
     () => (ticker ? api.getDashboard(ticker, days) : Promise.resolve(null)),
@@ -29,11 +75,14 @@ export function ExplorerPage() {
     setSearchParams({ ticker: t });
   };
 
-  // Pega ticker da URL ao montar
   useEffect(() => {
     const t = searchParams.get("ticker");
     if (t && t !== ticker) setTicker(t);
   }, [searchParams]);
+
+  const aggregatedPrices = data?.prices
+    ? aggregateByPeriod(data.prices, periodicity)
+    : [];
 
   return (
     <div className="space-y-6">
@@ -48,7 +97,7 @@ export function ExplorerPage() {
             )}
           </h1>
           <p className="text-sm text-gray-500">
-            Análise detalhada com overlay de insiders
+            Análise detalhada com overlay de trades
           </p>
         </div>
 
@@ -127,28 +176,80 @@ export function ExplorerPage() {
           {/* Gráfico de preço */}
           <div className="card">
             <div className="card-header">
-              <h2 className="card-title">
-                Preço + Trades de Insiders
-              </h2>
-              <div className="flex gap-3 text-xs">
-                <span className="flex items-center gap-1">
-                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                  Compra insider
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" />
-                  Venda insider
-                </span>
+              <h2 className="card-title">Preço + Trades</h2>
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Legenda */}
+                <div className="flex gap-3 text-xs">
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                    Compra
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" />
+                    Venda
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2.5 w-6 rounded bg-blue-500/40" />
+                    Vol. Mercado
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2.5 w-6 rounded bg-amber-500/60" />
+                    Vol. Trade
+                  </span>
+                </div>
+
+                {/* Tipo do gráfico */}
+                <div className="flex rounded-lg border border-gray-700 overflow-hidden">
+                  <button
+                    onClick={() => setChartType("line")}
+                    className={`flex items-center gap-1 px-2.5 py-1 text-xs transition-colors ${
+                      chartType === "line"
+                        ? "bg-brand-600/20 text-brand-400"
+                        : "text-gray-500 hover:text-gray-300"
+                    }`}
+                  >
+                    <LineChart className="h-3 w-3" />
+                    Linha
+                  </button>
+                  <button
+                    onClick={() => setChartType("candlestick")}
+                    className={`flex items-center gap-1 px-2.5 py-1 text-xs border-l border-gray-700 transition-colors ${
+                      chartType === "candlestick"
+                        ? "bg-brand-600/20 text-brand-400"
+                        : "text-gray-500 hover:text-gray-300"
+                    }`}
+                  >
+                    <BarChart2 className="h-3 w-3" />
+                    Candlestick
+                  </button>
+                </div>
+
+                {/* Periodicidade */}
+                <select
+                  value={periodicity}
+                  onChange={(e) => setPeriodicity(e.target.value as Periodicity)}
+                  className="input text-xs !py-1"
+                >
+                  <option value="daily">Diário</option>
+                  <option value="weekly">Semanal</option>
+                  <option value="monthly">Mensal</option>
+                  <option value="yearly">Anual</option>
+                </select>
               </div>
             </div>
-            <PriceChart prices={data.prices} insiderTrades={data.insider_trades} />
+            <PriceChart
+              prices={aggregatedPrices}
+              insiderTrades={data.insider_trades}
+              chartType={chartType}
+              periodicity={periodicity}
+            />
           </div>
 
           {/* Lista de trades */}
           <div className="card">
             <div className="card-header">
               <h2 className="card-title">
-                Negociações de Insiders ({data.insider_trades.length})
+                Negociações ({data.insider_trades.length})
               </h2>
             </div>
             <InsiderTradeList trades={data.insider_trades} />

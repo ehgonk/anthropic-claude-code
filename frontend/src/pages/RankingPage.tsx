@@ -27,10 +27,10 @@ export function RankingPage() {
         <div>
           <h1 className="text-2xl font-bold">
             <ListOrdered className="mr-2 inline h-6 w-6" />
-            Ranking Insider
+            Ranking
           </h1>
           <p className="text-sm text-gray-500">
-            Empresas ordenadas por score de atividade insider
+            Empresas ordenadas por score de atividade de trades
           </p>
         </div>
 

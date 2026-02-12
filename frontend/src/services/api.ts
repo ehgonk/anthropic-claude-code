@@ -1,5 +1,5 @@
 /**
- * Cliente HTTP para a API do Radar Insider.
+ * Cliente HTTP para a API do Y.
  * Todas as chamadas passam pelo proxy do Vite em dev → /api/*
  */
 
@@ -7,6 +7,18 @@ const BASE = "/api";
 
 async function fetchJSON<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`);
+  if (!res.ok) {
+    throw new Error(`API error ${res.status}: ${res.statusText}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function postJSON<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
   if (!res.ok) {
     throw new Error(`API error ${res.status}: ${res.statusText}`);
   }
@@ -86,6 +98,14 @@ export interface Summary {
   last_update: string | null;
 }
 
+export interface SyncResult {
+  status: string;
+  message: string;
+  cvm_records: number;
+  b3_records: number;
+  scores_calculated: number;
+}
+
 // === API Calls ===
 
 export const api = {
@@ -114,10 +134,13 @@ export const api = {
   getSummary: () => fetchJSON<Summary>("/summary"),
 
   triggerIngest: (source: "cvm" | "b3", year: number) =>
-    fetchJSON<{ status: string; records_inserted: number }>(
+    postJSON<{ status: string; records_inserted: number }>(
       `/ingest/${source}/${year}`
     ),
 
   recalculateScores: () =>
-    fetchJSON<{ status: string; scores_calculated: number }>("/scores/recalculate"),
+    postJSON<{ status: string; scores_calculated: number }>("/scores/recalculate"),
+
+  syncD1: () =>
+    postJSON<SyncResult>("/sync/d-1"),
 };

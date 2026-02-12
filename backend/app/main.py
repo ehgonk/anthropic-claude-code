@@ -1,4 +1,4 @@
-"""Ponto de entrada da aplicação FastAPI — Radar Insider."""
+"""Ponto de entrada da aplicação FastAPI — Y."""
 
 import logging
 from contextlib import asynccontextmanager
@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.app_name,
-    description="Plataforma de análise de insider trading lícito — B3/CVM",
+    description="Plataforma de análise de trades de administradores — B3/CVM",
     version="1.0.0",
     lifespan=lifespan,
 )

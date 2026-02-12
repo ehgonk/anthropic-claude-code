@@ -19,7 +19,7 @@ export function Layout() {
       <aside className="hidden w-56 shrink-0 border-r border-gray-800 bg-gray-900/50 lg:block">
         <div className="flex h-14 items-center gap-2.5 border-b border-gray-800 px-5">
           <Radar className="h-6 w-6 text-brand-500" />
-          <span className="text-base font-bold tracking-tight">Radar Insider</span>
+          <span className="text-base font-bold tracking-tight">Y</span>
         </div>
         <nav className="mt-4 space-y-1 px-3">
           {navItems.map((item) => (
@@ -48,7 +48,7 @@ export function Layout() {
         <header className="flex h-14 items-center justify-between border-b border-gray-800 px-4 lg:hidden">
           <div className="flex items-center gap-2">
             <Radar className="h-5 w-5 text-brand-500" />
-            <span className="text-sm font-bold">Radar Insider</span>
+            <span className="text-sm font-bold">Y</span>
           </div>
           <nav className="flex gap-1">
             {navItems.map((item) => (

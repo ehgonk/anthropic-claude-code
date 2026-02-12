@@ -72,7 +72,7 @@ export function HomePage() {
         <div>
           <h1 className="text-2xl font-bold">Visão Geral</h1>
           <p className="text-sm text-gray-500">
-            Monitoramento de insider trading lícito — B3/CVM
+            Monitoramento de trades de administradores — B3/CVM
           </p>
         </div>
         <SearchBar onSelect={handleTickerSelect} />
@@ -113,7 +113,7 @@ export function HomePage() {
           <div className="card-header">
             <h2 className="card-title">
               <TrendingUp className="mr-2 inline h-4 w-4" />
-              Top Scores — Insider Activity
+              Top Scores — Trade Activity
             </h2>
           </div>
           {rankingLoading ? (

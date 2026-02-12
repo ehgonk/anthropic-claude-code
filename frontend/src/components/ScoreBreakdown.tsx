@@ -68,7 +68,7 @@ export function ScoreBreakdown({ score }: ScoreBreakdownProps) {
   return (
     <div className="space-y-4">
       <ScoreBar
-        label="Insider Trading"
+        label="Trades Administradores"
         value={score.insider_score}
         weight="40%"
         color="#8b5cf6"

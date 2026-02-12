@@ -105,7 +105,7 @@ class PriceWithInsiders(BaseModel):
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "service": "Radar Insider"}
+    return {"status": "ok", "service": "Y"}
 
 
 @router.get("/companies", response_model=list[CompanyOut])
@@ -373,3 +373,48 @@ async def trigger_recalculate(db: AsyncSession = Depends(get_db)):
     """Recalcula todos os scores."""
     count = await calculate_all_scores(db)
     return {"status": "ok", "scores_calculated": count}
+
+
+@router.post("/sync/d-1")
+async def sync_d1(db: AsyncSession = Depends(get_db)):
+    """
+    Sincronização automática D-1: baixa dados CVM e B3 do ano corrente
+    e recalcula todos os scores.
+    """
+    import logging
+    from datetime import date as dt_date
+
+    from app.ingest.b3_cotahist import ingest_cotahist_year
+    from app.ingest.cvm_vlmo import ingest_vlmo_year
+
+    logger = logging.getLogger(__name__)
+    year = dt_date.today().year
+    cvm_count = 0
+    b3_count = 0
+    scores_count = 0
+
+    try:
+        logger.info("Sync D-1: ingestão CVM %d", year)
+        cvm_count = await ingest_vlmo_year(db, year)
+    except Exception as e:
+        logger.warning("Sync D-1: erro CVM: %s", e)
+
+    try:
+        logger.info("Sync D-1: ingestão B3 %d", year)
+        b3_count = await ingest_cotahist_year(db, year)
+    except Exception as e:
+        logger.warning("Sync D-1: erro B3: %s", e)
+
+    try:
+        logger.info("Sync D-1: recalculando scores")
+        scores_count = await calculate_all_scores(db)
+    except Exception as e:
+        logger.warning("Sync D-1: erro scores: %s", e)
+
+    return {
+        "status": "ok",
+        "message": f"Sync D-1 concluído para {year}",
+        "cvm_records": cvm_count,
+        "b3_records": b3_count,
+        "scores_calculated": scores_count,
+    }

@@ -2,7 +2,7 @@
  * Página de administração — ingestão de dados e recálculo de scores.
  */
 
-import { Database, Download, RefreshCw, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Database, Download, RefreshCw, AlertTriangle, CheckCircle2, Zap } from "lucide-react";
 import { useState } from "react";
 import { api } from "../services/api";
 
@@ -58,6 +58,25 @@ export function AdminPage() {
     }
   };
 
+  const handleFullSync = async () => {
+    setLoading(true);
+    addLog("Iniciando sincronização completa (CVM + B3 + Scores)...");
+    try {
+      const result = await api.syncD1();
+      addLog(
+        `Sync D-1 concluído: CVM=${result.cvm_records}, B3=${result.b3_records}, Scores=${result.scores_calculated}`,
+        "success"
+      );
+    } catch (err) {
+      addLog(
+        `Erro no sync: ${err instanceof Error ? err.message : "erro desconhecido"}`,
+        "error"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
@@ -73,12 +92,34 @@ export function AdminPage() {
         </p>
       </div>
 
+      {/* Sync completo */}
+      <div className="card border-brand-500/30 bg-brand-500/5">
+        <div className="card-header">
+          <h2 className="card-title">
+            <Zap className="mr-2 inline h-4 w-4" />
+            Sincronização Completa D-1
+          </h2>
+        </div>
+        <p className="mb-4 text-sm text-gray-400">
+          Baixa automaticamente dados CVM e B3 do ano corrente e recalcula todos os scores.
+          Inclui todas as empresas listadas na B3 e suas cotações históricas.
+        </p>
+        <button
+          onClick={handleFullSync}
+          disabled={loading}
+          className="btn-primary flex items-center gap-2 disabled:opacity-50"
+        >
+          <Zap className={`h-4 w-4 ${loading ? "animate-pulse" : ""}`} />
+          Executar Sync Completo
+        </button>
+      </div>
+
       {/* Ingestão CVM */}
       <div className="card">
         <div className="card-header">
           <h2 className="card-title">
             <Download className="mr-2 inline h-4 w-4" />
-            Ingestão CVM (Insider Trading)
+            Ingestão CVM (Trades de Administradores)
           </h2>
         </div>
         <p className="mb-4 text-sm text-gray-400">
@@ -133,7 +174,7 @@ export function AdminPage() {
         </div>
         <p className="mb-4 text-sm text-gray-400">
           Recalcula o score de -100 a +100 para todas as empresas com base nos dados
-          mais recentes de insiders, short interest, fluxo e momentum.
+          mais recentes de trades, short interest, fluxo e momentum.
         </p>
         <button
           onClick={handleRecalculate}
