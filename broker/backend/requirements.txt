@@ -6,3 +6,5 @@ httpx==0.28.1
 pydantic==2.10.6
 pydantic-settings==2.7.1
 python-dateutil==2.9.0
+pandas==2.2.3
+b3fileparser==0.1.3
