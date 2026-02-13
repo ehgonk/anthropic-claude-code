@@ -1,0 +1,8 @@
+fastapi==0.119.1
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.41
+aiosqlite==0.20.0
+httpx==0.28.1
+pydantic==2.10.6
+pydantic-settings==2.7.1
+python-dateutil==2.9.0
