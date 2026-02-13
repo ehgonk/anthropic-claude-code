@@ -34,13 +34,13 @@ make backend
 make frontend
 ```
 
-Visit http://localhost:5173
+Visit http://localhost:5174
 
 ## Development
 
-- Backend runs on http://localhost:8000
-- Frontend runs on http://localhost:5173
-- API documentation at http://localhost:8000/docs
+- Backend runs on http://localhost:8001
+- Frontend runs on http://localhost:5174
+- API documentation at http://localhost:8001/docs
 
 ## Data Source
 
