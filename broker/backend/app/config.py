@@ -18,8 +18,9 @@ class Settings(BaseSettings):
         "http://localhost:3000",
     ]
 
-    # B3 API
+    # B3 Data Sources
     brapi_base_url: str = "https://brapi.dev/api"
+    b3_cotahist_url: str = "https://bvmf.bmfbovespa.com.br/InstDados/SerHist"
 
     class Config:
         env_prefix = "BROKER_"

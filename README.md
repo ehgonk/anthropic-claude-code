@@ -89,7 +89,7 @@ de candlestick estilo TradingView.
 - **Backend:** Python 3.11+ / FastAPI / SQLite
 - **Frontend:** React 18 / TypeScript / Vite / TailwindCSS
 - **Charts:** Lightweight Charts (TradingView)
-- **Dados:** brapi.dev API / Mock data
+- **Dados:** B3 COTAHIST (official historical data)
 
 ### Quick Start
 
@@ -143,7 +143,7 @@ make frontend # Terminal 4
 | Aspecto          | Y Project                    | Home Broker                  |
 |------------------|------------------------------|------------------------------|
 | **Foco**         | Análise de insider trading   | Visualização de cotações     |
-| **Dados**        | CVM + B3 (públicos)          | brapi.dev / Mock             |
+| **Dados**        | CVM + B3 (públicos)          | B3 COTAHIST (oficial)        |
 | **Features**     | Score, ranking, anomalias    | Gráficos, preços, volume     |
 | **Portas**       | 8000 (API) / 5173 (UI)       | 8001 (API) / 5174 (UI)       |
 | **Complexidade** | Alta (scoring engine)        | Média (visualização)         |
