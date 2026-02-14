@@ -11,8 +11,50 @@ import io
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
-import pandas as pd
-from b3fileparser.b3parser import B3Parser
+
+
+def parse_cotahist_line(line: str) -> dict | None:
+    """Parse a single COTAHIST line (fixed-width format)"""
+    if len(line) < 200:
+        return None
+
+    tipo_reg = line[0:2]
+    if tipo_reg != "01":
+        return None
+
+    # Market type: 010 = spot market
+    market_type = int(line[24:27].strip() or "0")
+
+    ticker = line[12:24].strip()
+    if not ticker or len(ticker) < 4:
+        return None
+
+    # Filter: only spot market (010)
+    if market_type != 10:
+        return None
+
+    try:
+        trade_date = datetime.strptime(line[2:10], "%Y%m%d")
+    except ValueError:
+        return None
+
+    def _extract_decimal(raw: str, decimals: int = 2) -> float:
+        try:
+            val = int(raw.strip())
+            return val / (10**decimals)
+        except (ValueError, TypeError):
+            return 0.0
+
+    return {
+        "ticker": ticker,
+        "name": line[27:39].strip(),
+        "trade_date": trade_date,
+        "open_price": _extract_decimal(line[56:69]),
+        "high_price": _extract_decimal(line[69:82]),
+        "low_price": _extract_decimal(line[82:95]),
+        "close_price": _extract_decimal(line[108:121]),
+        "volume": _extract_decimal(line[152:170]),
+    }
 
 
 class B3CotahistService:
@@ -25,7 +67,6 @@ class B3CotahistService:
     def __init__(self, cache_dir: Optional[Path] = None):
         self.cache_dir = cache_dir or Path("data/cache")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.parser = B3Parser.create_parser(engine='pandas')
 
     async def download_cotahist(self, year: int) -> bytes:
         """
@@ -72,138 +113,119 @@ class B3CotahistService:
 
         return content
 
-    def parse_cotahist(self, txt_content: str) -> pd.DataFrame:
+    def parse_cotahist(self, txt_content: str, symbols: Optional[list[str]] = None) -> dict[str, list[dict]]:
         """
-        Parse COTAHIST TXT content using b3fileparser
+        Parse COTAHIST TXT content
 
         Args:
             txt_content: Content of COTAHIST TXT file
+            symbols: Optional list of symbols to filter
 
         Returns:
-            DataFrame with parsed stock data
+            Dictionary with symbol as key and list of daily records as value
         """
-        # Save to temporary file (b3fileparser reads from file)
-        temp_file = self.cache_dir / "temp_cotahist.txt"
-        temp_file.write_text(txt_content, encoding='latin-1')
-
         print("Parsing COTAHIST file...")
-        df = self.parser.read_b3_file(str(temp_file))
 
-        # Clean up temp file
-        temp_file.unlink()
+        records = {}
+        for line in txt_content.split('\n'):
+            rec = parse_cotahist_line(line)
+            if not rec:
+                continue
 
-        print(f"Parsed {len(df):,} records")
-        return df
+            ticker = rec['ticker']
 
-    def filter_vista_stocks(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Filter only spot market (VISTA) stocks from COTAHIST data
+            # Filter by symbols if provided
+            if symbols and ticker not in symbols:
+                continue
 
-        TIPO_DE_MERCADO codes:
-        - 10: VISTA (spot market)
-        - 20: FRACIONARIO (fractional)
-        - 70: OPCOES_DE_COMPRA (call options)
-        - 80: OPCOES_DE_VENDA (put options)
+            if ticker not in records:
+                records[ticker] = []
 
-        Args:
-            df: Full COTAHIST DataFrame
+            records[ticker].append(rec)
 
-        Returns:
-            Filtered DataFrame with only VISTA stocks
-        """
-        # Filter spot market only
-        vista_df = df[df['TIPO_DE_MERCADO'] == 10].copy()
+        print(f"Parsed {len(records)} symbols")
+        return records
 
-        # Filter out options and other derivatives (keep only stocks ending in digits)
-        # Example: PETR4, VALE3, ITUB4 (not PETRB, VALEPA, etc.)
-        vista_df = vista_df[
-            vista_df['CODIGO_DE_NEGOCIACAO'].str.match(r'^[A-Z]{4}\d{1,2}$')
-        ]
-
-        print(f"Filtered to {len(vista_df):,} VISTA stock records")
-        return vista_df
-
-    async def get_stock_data(self, year: int, symbols: Optional[list[str]] = None) -> pd.DataFrame:
+    async def get_stock_data(self, year: int, symbols: Optional[list[str]] = None) -> dict:
         """
         Get stock data for specific symbols and year
 
         Args:
             year: Year to get data for
             symbols: Optional list of stock symbols (e.g., ['PETR4', 'VALE3'])
-                    If None, returns all stocks
 
         Returns:
-            DataFrame with filtered stock data
+            Dictionary with stock data
         """
         # Check cache
-        cache_file = self.cache_dir / f"cotahist_{year}.parquet"
+        cache_file = self.cache_dir / f"cotahist_{year}.txt"
         if cache_file.exists():
             print(f"Loading from cache: {cache_file}")
-            df = pd.read_parquet(cache_file)
+            txt_content = cache_file.read_text(encoding='latin-1')
         else:
-            # Download and parse
+            # Download and extract
             zip_content = await self.download_cotahist(year)
             txt_content = self.extract_txt_from_zip(zip_content)
-            df = self.parse_cotahist(txt_content)
-            df = self.filter_vista_stocks(df)
 
             # Save to cache
-            df.to_parquet(cache_file)
+            cache_file.write_text(txt_content, encoding='latin-1')
             print(f"Cached to {cache_file}")
 
-        # Filter by symbols if provided
-        if symbols:
-            df = df[df['CODIGO_DE_NEGOCIACAO'].isin(symbols)]
-            print(f"Filtered to {len(symbols)} symbols: {len(df):,} records")
+        # Parse and filter
+        records = self.parse_cotahist(txt_content, symbols=symbols)
 
-        return df
+        return records
 
-    def df_to_stock_records(self, df: pd.DataFrame) -> dict[str, dict]:
+    def df_to_stock_records(self, stock_data: dict) -> dict[str, dict]:
         """
-        Convert B3 DataFrame to stock records grouped by symbol
+        Convert parsed data to stock records grouped by symbol
 
         Args:
-            df: COTAHIST DataFrame
+            stock_data: Dictionary from get_stock_data()
 
         Returns:
             Dictionary with symbol as key and stock info + prices as value
         """
         stocks = {}
 
-        for symbol in df['CODIGO_DE_NEGOCIACAO'].unique():
-            symbol_df = df[df['CODIGO_DE_NEGOCIACAO'] == symbol].copy()
+        for symbol, daily_records in stock_data.items():
+            if not daily_records:
+                continue
 
             # Sort by date
-            symbol_df = symbol_df.sort_values('DATA_DO_PREGAO')
+            daily_records.sort(key=lambda x: x['trade_date'])
 
             # Get latest price for current quote
-            latest = symbol_df.iloc[-1]
+            latest = daily_records[-1]
 
             # Calculate change percent (comparing last two days)
-            if len(symbol_df) >= 2:
-                prev_close = symbol_df.iloc[-2]['PRECO_ULTIMO_NEGOCIO'] / 100
-                curr_close = latest['PRECO_ULTIMO_NEGOCIO'] / 100
-                change_percent = ((curr_close - prev_close) / prev_close) * 100
+            if len(daily_records) >= 2:
+                prev_close = daily_records[-2]['close_price']
+                curr_close = latest['close_price']
+                if prev_close > 0:
+                    change_percent = ((curr_close - prev_close) / prev_close) * 100
+                else:
+                    change_percent = 0.0
             else:
                 change_percent = 0.0
 
             # Build stock record
             stocks[symbol] = {
                 'symbol': symbol,
-                'name': latest['NOME_RESUMIDO_DA_EMPRESA_EMISSORA'].strip(),
-                'price': latest['PRECO_ULTIMO_NEGOCIO'] / 100,  # B3 prices are in cents
+                'name': latest['name'],
+                'price': latest['close_price'],
                 'change_percent': change_percent,
-                'volume': int(latest['VOLUME_TOTAL_NEGOCIADO']),
+                'volume': int(latest['volume']),
                 'prices': [
                     {
-                        'date': row['DATA_DO_PREGAO'].strftime('%Y-%m-%d'),
-                        'open': row['PRECO_DE_ABERTURA'] / 100,
-                        'high': row['PRECO_MAXIMO'] / 100,
-                        'low': row['PRECO_MINIMO'] / 100,
-                        'close': row['PRECO_ULTIMO_NEGOCIO'] / 100,
-                        'volume': int(row['VOLUME_TOTAL_NEGOCIADO']),
+                        'date': row['trade_date'].strftime('%Y-%m-%d'),
+                        'open': row['open_price'],
+                        'high': row['high_price'],
+                        'low': row['low_price'],
+                        'close': row['close_price'],
+                        'volume': int(row['volume']),
                     }
-                    for _, row in symbol_df.iterrows()
+                    for row in daily_records
                 ]
             }
 
