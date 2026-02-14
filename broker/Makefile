@@ -4,7 +4,7 @@
 setup: setup-backend setup-frontend
 
 setup-backend:
-	cd backend && python -m venv .venv && .venv/bin/pip install --upgrade pip && .venv/bin/pip install -r requirements.txt
+	cd backend && python3 -m venv .venv && .venv/bin/pip install --upgrade pip && .venv/bin/pip install -r requirements.txt
 
 setup-frontend:
 	cd frontend && npm install
@@ -18,7 +18,7 @@ frontend:
 
 # Seed demo data
 seed:
-	cd backend && .venv/bin/python -m app.seed
+	cd backend && .venv/bin/python3 -m app.seed
 
 # Build
 build-frontend:
