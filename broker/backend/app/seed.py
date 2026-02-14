@@ -53,20 +53,20 @@ async def seed_with_cotahist_data(year: int = None):
 
     try:
         # Download and parse COTAHIST data
-        df = await b3_service.get_stock_data(year, symbols=TARGET_STOCKS)
+        stock_data = await b3_service.get_stock_data(year, symbols=TARGET_STOCKS)
 
-        if df.empty:
+        if not stock_data:
             print(f"⚠️  No data found for year {year}")
             print("Falling back to previous year...")
-            df = await b3_service.get_stock_data(year - 1, symbols=TARGET_STOCKS)
+            stock_data = await b3_service.get_stock_data(year - 1, symbols=TARGET_STOCKS)
 
-        if df.empty:
+        if not stock_data:
             print("❌ No data available. Cannot seed database.")
             return
 
         # Convert to stock records
         print("\nProcessing stock data...")
-        stock_records = b3_service.df_to_stock_records(df)
+        stock_records = b3_service.df_to_stock_records(stock_data)
 
         print(f"Found {len(stock_records)} stocks with data\n")
 
