@@ -89,16 +89,16 @@ async def ingest_b3_cotahist(year: int, db: AsyncSession = Depends(get_db)):
             )
 
         # Download and parse COTAHIST data
-        df = await b3_service.get_stock_data(year, symbols=TARGET_STOCKS)
+        stock_data = await b3_service.get_stock_data(year, symbols=TARGET_STOCKS)
 
-        if df.empty:
+        if not stock_data:
             raise HTTPException(
                 status_code=404,
                 detail=f"No data found for year {year}"
             )
 
         # Convert to stock records
-        stock_records = b3_service.df_to_stock_records(df)
+        stock_records = b3_service.df_to_stock_records(stock_data)
 
         total_prices = 0
 
