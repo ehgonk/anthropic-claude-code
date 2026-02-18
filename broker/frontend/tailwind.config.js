@@ -8,11 +8,11 @@ export default {
     extend: {
       colors: {
         dark: {
-          bg: 'var(--color-bg)',
-          card: 'var(--color-card)',
-          border: 'var(--color-border)',
-          text: 'var(--color-text)',
-          muted: 'var(--color-muted)',
+          bg:     'rgb(var(--color-bg) / <alpha-value>)',
+          card:   'rgb(var(--color-card) / <alpha-value>)',
+          border: 'rgb(var(--color-border) / <alpha-value>)',
+          text:   'rgb(var(--color-text) / <alpha-value>)',
+          muted:  'rgb(var(--color-muted) / <alpha-value>)',
         },
         green: {
           profit: '#26a69a',

@@ -103,7 +103,7 @@ const lightChartTheme = {
   grid: '#f0f0f0',
   border: '#e1e1e1',
   crosshair: '#9b9ea3',
-  crosshairLabel: '#e1e1e1',
+  crosshairLabel: '#dde1ed',
 }
 
 export default function Chart({ data, selectedStock, isDark = true }: ChartProps) {
