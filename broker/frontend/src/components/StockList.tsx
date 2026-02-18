@@ -30,7 +30,7 @@ export default function StockList({ stocks, selectedStock, onStockSelect }: Stoc
           <input
             type="text"
             placeholder="Search symbols..."
-            className="w-full pl-10 pr-3 py-2 bg-dark-bg border border-dark-border rounded text-sm text-white placeholder-dark-muted focus:outline-none focus:border-dark-text"
+            className="w-full pl-10 pr-3 py-2 bg-dark-bg border border-dark-border rounded text-sm text-dark-text placeholder-dark-muted focus:outline-none focus:border-dark-muted"
           />
         </div>
       </div>
@@ -60,12 +60,12 @@ export default function StockList({ stocks, selectedStock, onStockSelect }: Stoc
               }`}
             >
               <div className="col-span-4 flex flex-col">
-                <span className="text-white text-sm font-medium">{stock.symbol}</span>
+                <span className="text-dark-text text-sm font-medium">{stock.symbol}</span>
                 <span className="text-dark-muted text-xs truncate">{stock.name}</span>
               </div>
 
               <div className="col-span-3 text-right">
-                <span className="text-white text-sm">
+                <span className="text-dark-text text-sm">
                   R$ {stock.price.toFixed(2)}
                 </span>
               </div>

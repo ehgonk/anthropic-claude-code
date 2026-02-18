@@ -7,6 +7,7 @@ export type ChartPeriod = '1D' | '1W' | '1M' | '3M' | '1Y'
 interface ChartProps {
   data: CandleData[]
   selectedStock: Stock | null
+  isDark?: boolean
 }
 
 /**
@@ -87,7 +88,25 @@ function aggregateCandles(dailyData: CandleData[], period: ChartPeriod): CandleD
   return result
 }
 
-export default function Chart({ data, selectedStock }: ChartProps) {
+const darkChartTheme = {
+  background: '#131722',
+  text: '#d1d4dc',
+  grid: '#1e222d',
+  border: '#2a2e39',
+  crosshair: '#758696',
+  crosshairLabel: '#4c525e',
+}
+
+const lightChartTheme = {
+  background: '#ffffff',
+  text: '#131722',
+  grid: '#f0f0f0',
+  border: '#e1e1e1',
+  crosshair: '#9b9ea3',
+  crosshairLabel: '#e1e1e1',
+}
+
+export default function Chart({ data, selectedStock, isDark = true }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
@@ -97,33 +116,35 @@ export default function Chart({ data, selectedStock }: ChartProps) {
   useEffect(() => {
     if (!chartContainerRef.current) return
 
+    const theme = isDark ? darkChartTheme : lightChartTheme
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { color: '#131722' },
-        textColor: '#d1d4dc',
+        background: { color: theme.background },
+        textColor: theme.text,
+        attributionLogo: false,
       },
       grid: {
-        vertLines: { color: '#1e222d' },
-        horzLines: { color: '#1e222d' },
+        vertLines: { color: theme.grid },
+        horzLines: { color: theme.grid },
       },
       width: chartContainerRef.current.clientWidth,
       height: chartContainerRef.current.clientHeight,
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
-        borderColor: '#2a2e39',
+        borderColor: theme.border,
       },
       rightPriceScale: {
-        borderColor: '#2a2e39',
+        borderColor: theme.border,
       },
       crosshair: {
         horzLine: {
-          color: '#758696',
-          labelBackgroundColor: '#4c525e',
+          color: theme.crosshair,
+          labelBackgroundColor: theme.crosshairLabel,
         },
         vertLine: {
-          color: '#758696',
-          labelBackgroundColor: '#4c525e',
+          color: theme.crosshair,
+          labelBackgroundColor: theme.crosshairLabel,
         },
       },
     })
@@ -173,6 +194,28 @@ export default function Chart({ data, selectedStock }: ChartProps) {
     }
   }, [])
 
+  // Update chart colors when theme changes
+  useEffect(() => {
+    if (!chartRef.current) return
+    const theme = isDark ? darkChartTheme : lightChartTheme
+    chartRef.current.applyOptions({
+      layout: {
+        background: { color: theme.background },
+        textColor: theme.text,
+      },
+      grid: {
+        vertLines: { color: theme.grid },
+        horzLines: { color: theme.grid },
+      },
+      timeScale: { borderColor: theme.border },
+      rightPriceScale: { borderColor: theme.border },
+      crosshair: {
+        horzLine: { color: theme.crosshair, labelBackgroundColor: theme.crosshairLabel },
+        vertLine: { color: theme.crosshair, labelBackgroundColor: theme.crosshairLabel },
+      },
+    })
+  }, [isDark])
+
   // Re-render chart data when data or period changes
   useEffect(() => {
     if (!candlestickSeriesRef.current || !volumeSeriesRef.current || data.length === 0) return
@@ -216,7 +259,7 @@ export default function Chart({ data, selectedStock }: ChartProps) {
       {/* Chart header */}
       <div className="flex items-center gap-4 px-4 py-2 border-b border-dark-border">
         <div className="flex items-center gap-2">
-          <span className="text-white font-semibold text-lg">
+          <span className="text-dark-text font-semibold text-lg">
             {selectedStock?.symbol || 'Select a stock'}
           </span>
           {selectedStock && (
@@ -240,8 +283,8 @@ export default function Chart({ data, selectedStock }: ChartProps) {
               title={periodLabels[p]}
               className={`px-3 py-1 text-sm rounded transition-colors ${
                 period === p
-                  ? 'text-white bg-dark-border'
-                  : 'text-dark-muted hover:text-white hover:bg-dark-border/50'
+                  ? 'text-dark-text bg-dark-border'
+                  : 'text-dark-muted hover:text-dark-text hover:bg-dark-border/50'
               }`}
             >
               {p}

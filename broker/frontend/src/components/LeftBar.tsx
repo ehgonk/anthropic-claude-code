@@ -25,7 +25,7 @@ export default function LeftBar() {
           className="p-2 hover:bg-dark-border rounded transition-colors group relative"
           title={tool.label}
         >
-          <tool.icon className="w-5 h-5 text-dark-muted group-hover:text-white" />
+          <tool.icon className="w-5 h-5 text-dark-muted group-hover:text-dark-text" />
         </button>
       ))}
     </div>

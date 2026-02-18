@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Light theme (default) */
+:root {
+  --color-bg: #f0f3fa;
+  --color-card: #ffffff;
+  --color-border: #dde1ed;
+  --color-text: #131722;
+  --color-muted: #6e737e;
+}
+
+/* Dark theme */
+.dark {
+  --color-bg: #0a0e14;
+  --color-card: #131722;
+  --color-border: #2a2e39;
+  --color-text: #d1d4dc;
+  --color-muted: #787b86;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -14,8 +32,8 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #0a0e14;
-  color: #d1d4dc;
+  background-color: var(--color-bg);
+  color: var(--color-text);
   overflow: hidden;
 }
 

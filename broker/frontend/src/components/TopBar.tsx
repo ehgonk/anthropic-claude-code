@@ -1,4 +1,4 @@
-import { Menu, Settings, Bell, Database } from 'lucide-react'
+import { Menu, Settings, Bell, Database, Sun, Moon } from 'lucide-react'
 import type { Stock } from '../App'
 
 interface TopBarProps {
@@ -6,9 +6,11 @@ interface TopBarProps {
   lastB3Date: string | null
   isUpdating: boolean
   updateMessage: string | null
+  isDark: boolean
+  onToggleTheme: () => void
 }
 
-export default function TopBar({ selectedStock, lastB3Date, isUpdating, updateMessage }: TopBarProps) {
+export default function TopBar({ selectedStock, lastB3Date, isUpdating, updateMessage, isDark, onToggleTheme }: TopBarProps) {
   const formatDate = (dateStr: string) => {
     const [year, month, day] = dateStr.split('-')
     return `${day}/${month}/${year}`
@@ -21,13 +23,13 @@ export default function TopBar({ selectedStock, lastB3Date, isUpdating, updateMe
           <Menu className="w-5 h-5 text-dark-muted" />
         </button>
 
-        <span className="text-lg font-bold text-white">Broker</span>
+        <span className="text-lg font-bold text-dark-text">Broker</span>
 
         {selectedStock && (
           <div className="flex items-center gap-3 ml-4 pl-4 border-l border-dark-border">
             <div className="flex items-center gap-2">
-              <span className="text-white font-semibold">{selectedStock.symbol}</span>
-              <span className="text-xl font-bold text-white">
+              <span className="text-dark-text font-semibold">{selectedStock.symbol}</span>
+              <span className="text-xl font-bold text-dark-text">
                 R$ {selectedStock.price.toFixed(2)}
               </span>
               <span className={`text-sm font-semibold ${
@@ -61,7 +63,7 @@ export default function TopBar({ selectedStock, lastB3Date, isUpdating, updateMe
         <div className="flex items-center gap-2 px-3 py-1 bg-dark-bg rounded border border-dark-border">
           <Database className="w-3.5 h-3.5 text-dark-muted" />
           <span className="text-dark-muted text-xs">B3:</span>
-          <span className="text-white text-xs font-medium">
+          <span className="text-dark-text text-xs font-medium">
             {lastB3Date ? formatDate(lastB3Date) : '--/--/----'}
           </span>
         </div>
@@ -69,6 +71,19 @@ export default function TopBar({ selectedStock, lastB3Date, isUpdating, updateMe
         <button className="p-2 hover:bg-dark-border rounded">
           <Bell className="w-4 h-4 text-dark-muted" />
         </button>
+
+        {/* Theme toggle */}
+        <button
+          onClick={onToggleTheme}
+          title={isDark ? 'Modo claro' : 'Modo escuro'}
+          className="p-2 hover:bg-dark-border rounded transition-colors"
+        >
+          {isDark
+            ? <Sun className="w-4 h-4 text-dark-muted hover:text-dark-text" />
+            : <Moon className="w-4 h-4 text-dark-muted hover:text-dark-text" />
+          }
+        </button>
+
         <button className="p-2 hover:bg-dark-border rounded">
           <Settings className="w-4 h-4 text-dark-muted" />
         </button>

@@ -3,8 +3,8 @@ import Chart from './components/Chart'
 import StockList from './components/StockList'
 import TopBar from './components/TopBar'
 import LeftBar from './components/LeftBar'
+import LayoutPicker, { GridLayout, LAYOUTS } from './components/LayoutPicker'
 import api from './services/api'
-import { LayoutGrid } from 'lucide-react'
 
 export interface Stock {
   symbol: string
@@ -23,25 +23,26 @@ export interface CandleData {
   volume: number
 }
 
-type LayoutMode = 1 | 2 | 3
+const MAX_PANELS = 16
 
 interface ChartPanel {
   stock: Stock | null
   candleData: CandleData[]
 }
 
+function makeEmptyPanels(): ChartPanel[] {
+  return Array.from({ length: MAX_PANELS }, () => ({ stock: null, candleData: [] }))
+}
+
 function App() {
+  const [isDark, setIsDark] = useState(true)
   const [stocks, setStocks] = useState<Stock[]>([])
   const [loading, setLoading] = useState(true)
   const [lastB3Date, setLastB3Date] = useState<string | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
   const [updateMessage, setUpdateMessage] = useState<string | null>(null)
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>(1)
-  const [panels, setPanels] = useState<ChartPanel[]>([
-    { stock: null, candleData: [] },
-    { stock: null, candleData: [] },
-    { stock: null, candleData: [] },
-  ])
+  const [layout, setLayout] = useState<GridLayout>(LAYOUTS[0]) // 1x1 default
+  const [panels, setPanels] = useState<ChartPanel[]>(makeEmptyPanels())
   const [activePanel, setActivePanel] = useState(0)
 
   const loadCandleData = useCallback(async (symbol: string, panelIndex: number) => {
@@ -61,7 +62,6 @@ function App() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        // Load existing data first (fast - from DB)
         const stocksData = await api.getStocks()
         setStocks(stocksData)
 
@@ -75,14 +75,10 @@ function App() {
           })
         }
 
-        // Get last update info (fast - from DB)
         const lastUpdate = await api.getLastUpdate()
         setLastB3Date(lastUpdate.last_date)
-
-        // Show app immediately - don't block on ingest
         setLoading(false)
 
-        // Run ingest in background (non-blocking)
         setIsUpdating(true)
         setUpdateMessage('Atualizando histórico de cotações B3...')
 
@@ -97,7 +93,6 @@ function App() {
           const updatedLastUpdate = await api.getLastUpdate()
           setLastB3Date(updatedLastUpdate.last_date)
 
-          // Refresh panel stocks with updated data
           if (updatedStocks.length > 0) {
             setPanels(prev => prev.map((panel) => {
               if (!panel.stock) return panel
@@ -106,7 +101,6 @@ function App() {
             }))
           }
         } catch {
-          // Ingest may fail (network, 403, etc.) - keep existing data
           setUpdateMessage(lastUpdate.last_date
             ? `Usando dados de ${lastUpdate.last_date}`
             : 'Dados B3 carregados do cache local')
@@ -142,12 +136,18 @@ function App() {
     loadCandleData(stock.symbol, activePanel)
   }
 
-  const cycleLayout = () => {
-    setLayoutMode(prev => {
-      const next = ((prev % 3) + 1) as LayoutMode
+  const toggleTheme = () => {
+    setIsDark(prev => {
+      const next = !prev
+      document.documentElement.classList.toggle('dark', next)
       return next
     })
   }
+
+  // Apply dark class on mount
+  useEffect(() => {
+    document.documentElement.classList.add('dark')
+  }, [])
 
   if (loading) {
     return (
@@ -160,13 +160,7 @@ function App() {
     )
   }
 
-  const getLayoutClass = () => {
-    switch (layoutMode) {
-      case 1: return 'grid-cols-1'
-      case 2: return 'grid-cols-2'
-      case 3: return 'grid-cols-3'
-    }
-  }
+  const totalPanels = layout.cols * layout.rows
 
   return (
     <div className="flex flex-col h-screen bg-dark-bg">
@@ -175,50 +169,57 @@ function App() {
         lastB3Date={lastB3Date}
         isUpdating={isUpdating}
         updateMessage={updateMessage}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
       />
 
       <div className="flex flex-1 overflow-hidden">
         <LeftBar />
 
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0">
           {/* Layout control bar */}
           <div className="flex items-center justify-between px-4 py-1 bg-dark-card border-b border-dark-border">
-            <div className="flex items-center gap-2">
-              {layoutMode > 1 && Array.from({ length: layoutMode }).map((_, i) => (
+            <div className="flex items-center gap-1 flex-wrap">
+              {totalPanels > 1 && Array.from({ length: totalPanels }).map((_, i) => (
                 <button
                   key={i}
                   onClick={() => setActivePanel(i)}
                   className={`px-2 py-0.5 text-xs rounded transition-colors ${
                     activePanel === i
                       ? 'text-white bg-blue-600'
-                      : 'text-dark-muted hover:text-white bg-dark-border/50'
+                      : 'text-dark-muted hover:text-dark-text bg-dark-border/50'
                   }`}
                 >
-                  {panels[i].stock?.symbol || `Tela ${i + 1}`}
+                  {panels[i].stock?.symbol || `T${i + 1}`}
                 </button>
               ))}
             </div>
-            <button
-              onClick={cycleLayout}
-              title={`Layout: ${layoutMode} tela${layoutMode > 1 ? 's' : ''}`}
-              className="flex items-center gap-1.5 px-2 py-1 text-xs text-dark-muted hover:text-white hover:bg-dark-border rounded transition-colors"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span>{layoutMode} Tela{layoutMode > 1 ? 's' : ''}</span>
-            </button>
+            <LayoutPicker layout={layout} onSelect={(l) => {
+              setLayout(l)
+              // keep activePanel within bounds
+              if (activePanel >= l.cols * l.rows) setActivePanel(0)
+            }} />
           </div>
 
           {/* Chart panels */}
-          <div className={`flex-1 grid ${getLayoutClass()} gap-px bg-dark-border`}>
-            {Array.from({ length: layoutMode }).map((_, i) => (
+          <div
+            className="flex-1 gap-px bg-dark-border"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${layout.cols}, 1fr)`,
+              gridTemplateRows: `repeat(${layout.rows}, 1fr)`,
+            }}
+          >
+            {Array.from({ length: totalPanels }).map((_, i) => (
               <div
                 key={i}
                 onClick={() => setActivePanel(i)}
-                className={`relative ${activePanel === i && layoutMode > 1 ? 'ring-1 ring-blue-500/50' : ''}`}
+                className={`relative min-w-0 min-h-0 ${activePanel === i && totalPanels > 1 ? 'ring-1 ring-inset ring-blue-500/50' : ''}`}
               >
                 <Chart
                   data={panels[i].candleData}
                   selectedStock={panels[i].stock}
+                  isDark={isDark}
                 />
               </div>
             ))}
