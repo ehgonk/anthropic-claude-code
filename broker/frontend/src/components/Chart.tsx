@@ -118,6 +118,7 @@ export default function Chart({ data, selectedStock, isDark = true }: ChartProps
 
     const theme = isDark ? darkChartTheme : lightChartTheme
     const chart = createChart(chartContainerRef.current, {
+      autoSize: true,
       layout: {
         background: { color: theme.background },
         textColor: theme.text,
@@ -127,8 +128,6 @@ export default function Chart({ data, selectedStock, isDark = true }: ChartProps
         vertLines: { color: theme.grid },
         horzLines: { color: theme.grid },
       },
-      width: chartContainerRef.current.clientWidth,
-      height: chartContainerRef.current.clientHeight,
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
@@ -177,19 +176,7 @@ export default function Chart({ data, selectedStock, isDark = true }: ChartProps
     candlestickSeriesRef.current = candlestickSeries
     volumeSeriesRef.current = volumeSeries
 
-    const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-          height: chartContainerRef.current.clientHeight,
-        })
-      }
-    }
-
-    window.addEventListener('resize', handleResize)
-
     return () => {
-      window.removeEventListener('resize', handleResize)
       chart.remove()
     }
   }, [])
