@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createChart, IChartApi, ISeriesApi, CandlestickData, HistogramData } from 'lightweight-charts'
 import type { Stock, CandleData } from '../App'
 
@@ -113,71 +113,87 @@ export default function Chart({ data, selectedStock, isDark = true }: ChartProps
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const [period, setPeriod] = useState<ChartPeriod>('1D')
 
-  useEffect(() => {
-    if (!chartContainerRef.current) return
+  useLayoutEffect(() => {
+    const container = chartContainerRef.current
+    if (!container) return
 
     const theme = isDark ? darkChartTheme : lightChartTheme
-    const chart = createChart(chartContainerRef.current, {
-      autoSize: true,
-      layout: {
-        background: { color: theme.background },
-        textColor: theme.text,
-        attributionLogo: false,
-      },
-      grid: {
-        vertLines: { color: theme.grid },
-        horzLines: { color: theme.grid },
-      },
-      timeScale: {
-        timeVisible: true,
-        secondsVisible: false,
-        borderColor: theme.border,
-      },
-      rightPriceScale: {
-        borderColor: theme.border,
-      },
-      crosshair: {
-        horzLine: {
-          color: theme.crosshair,
-          labelBackgroundColor: theme.crosshairLabel,
+
+    // Wait for container to have dimensions
+    const initChart = () => {
+      const chart = createChart(container, {
+        autoSize: true,
+        layout: {
+          background: { color: theme.background },
+          textColor: theme.text,
+          attributionLogo: false,
         },
-        vertLine: {
-          color: theme.crosshair,
-          labelBackgroundColor: theme.crosshairLabel,
+        grid: {
+          vertLines: { color: theme.grid },
+          horzLines: { color: theme.grid },
         },
-      },
-    })
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: false,
+          borderColor: theme.border,
+        },
+        rightPriceScale: {
+          borderColor: theme.border,
+        },
+        crosshair: {
+          horzLine: {
+            color: theme.crosshair,
+            labelBackgroundColor: theme.crosshairLabel,
+          },
+          vertLine: {
+            color: theme.crosshair,
+            labelBackgroundColor: theme.crosshairLabel,
+          },
+        },
+      })
 
-    const candlestickSeries = chart.addCandlestickSeries({
-      upColor: '#26a69a',
-      downColor: '#ef5350',
-      borderUpColor: '#26a69a',
-      borderDownColor: '#ef5350',
-      wickUpColor: '#26a69a',
-      wickDownColor: '#ef5350',
-    })
+      const candlestickSeries = chart.addCandlestickSeries({
+        upColor: '#26a69a',
+        downColor: '#ef5350',
+        borderUpColor: '#26a69a',
+        borderDownColor: '#ef5350',
+        wickUpColor: '#26a69a',
+        wickDownColor: '#ef5350',
+      })
 
-    const volumeSeries = chart.addHistogramSeries({
-      color: '#26a69a',
-      priceFormat: {
-        type: 'volume',
-      },
-      priceScaleId: '',
-    })
+      const volumeSeries = chart.addHistogramSeries({
+        color: '#26a69a',
+        priceFormat: {
+          type: 'volume',
+        },
+        priceScaleId: '',
+      })
 
-    volumeSeries.priceScale().applyOptions({
-      scaleMargins: {
-        top: 0.7,
-        bottom: 0,
-      },
-    })
+      volumeSeries.priceScale().applyOptions({
+        scaleMargins: {
+          top: 0.7,
+          bottom: 0,
+        },
+      })
 
-    chartRef.current = chart
-    candlestickSeriesRef.current = candlestickSeries
-    volumeSeriesRef.current = volumeSeries
+      chartRef.current = chart
+      candlestickSeriesRef.current = candlestickSeries
+      volumeSeriesRef.current = volumeSeries
+    }
+
+    // Use rAF to ensure DOM has been laid out and container has dimensions
+    const rafId = requestAnimationFrame(() => {
+      initChart()
+    })
 
     return () => {
-      chart.remove()
+      cancelAnimationFrame(rafId)
+      if (chartRef.current) {
+        chartRef.current.remove()
+        chartRef.current = null
+        candlestickSeriesRef.current = null
+        volumeSeriesRef.current = null
+      }
     }
   }, [])
 
@@ -205,30 +221,42 @@ export default function Chart({ data, selectedStock, isDark = true }: ChartProps
 
   // Re-render chart data when data or period changes
   useEffect(() => {
-    if (!candlestickSeriesRef.current || !volumeSeriesRef.current || data.length === 0) return
+    if (data.length === 0) return
 
-    const aggregated = aggregateCandles(data, period)
+    const applyData = () => {
+      if (!candlestickSeriesRef.current || !volumeSeriesRef.current) {
+        // Chart not yet initialized (rAF pending), retry shortly
+        const retryId = requestAnimationFrame(applyData)
+        return () => cancelAnimationFrame(retryId)
+      }
 
-    const candleData: CandlestickData[] = aggregated.map((d) => ({
-      time: d.time,
-      open: d.open,
-      high: d.high,
-      low: d.low,
-      close: d.close,
-    }))
+      const aggregated = aggregateCandles(data, period)
 
-    const volumeData: HistogramData[] = aggregated.map((d) => ({
-      time: d.time,
-      value: d.volume,
-      color: d.close >= d.open ? '#26a69a80' : '#ef535080',
-    }))
+      const candleData: CandlestickData[] = aggregated.map((d) => ({
+        time: d.time,
+        open: d.open,
+        high: d.high,
+        low: d.low,
+        close: d.close,
+      }))
 
-    candlestickSeriesRef.current.setData(candleData)
-    volumeSeriesRef.current.setData(volumeData)
+      const volumeData: HistogramData[] = aggregated.map((d) => ({
+        time: d.time,
+        value: d.volume,
+        color: d.close >= d.open ? '#26a69a80' : '#ef535080',
+      }))
 
-    if (chartRef.current) {
-      chartRef.current.timeScale().fitContent()
+      candlestickSeriesRef.current.setData(candleData)
+      volumeSeriesRef.current.setData(volumeData)
+
+      if (chartRef.current) {
+        chartRef.current.timeScale().fitContent()
+      }
     }
+
+    // Use rAF to sync with chart initialization
+    const rafId = requestAnimationFrame(applyData)
+    return () => cancelAnimationFrame(rafId)
   }, [data, period])
 
   const periods: ChartPeriod[] = ['1D', '1W', '1M', '3M', '1Y']
