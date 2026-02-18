@@ -1,11 +1,19 @@
-import { Menu, Settings, Bell } from 'lucide-react'
+import { Menu, Settings, Bell, Database } from 'lucide-react'
 import type { Stock } from '../App'
 
 interface TopBarProps {
   selectedStock: Stock | null
+  lastB3Date: string | null
+  isUpdating: boolean
+  updateMessage: string | null
 }
 
-export default function TopBar({ selectedStock }: TopBarProps) {
+export default function TopBar({ selectedStock, lastB3Date, isUpdating, updateMessage }: TopBarProps) {
+  const formatDate = (dateStr: string) => {
+    const [year, month, day] = dateStr.split('-')
+    return `${day}/${month}/${year}`
+  }
+
   return (
     <div className="h-12 bg-dark-card border-b border-dark-border flex items-center justify-between px-4">
       <div className="flex items-center gap-4">
@@ -33,7 +41,31 @@ export default function TopBar({ selectedStock }: TopBarProps) {
         )}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
+        {/* Update status message */}
+        {isUpdating && updateMessage && (
+          <div className="flex items-center gap-2 px-3 py-1 bg-blue-900/30 border border-blue-700/50 rounded">
+            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+            <span className="text-blue-400 text-xs">{updateMessage}</span>
+          </div>
+        )}
+
+        {/* Success message after update */}
+        {!isUpdating && updateMessage && (
+          <div className="flex items-center gap-2 px-3 py-1 bg-green-900/30 border border-green-700/50 rounded">
+            <span className="text-green-400 text-xs">{updateMessage}</span>
+          </div>
+        )}
+
+        {/* Last B3 update date */}
+        <div className="flex items-center gap-2 px-3 py-1 bg-dark-bg rounded border border-dark-border">
+          <Database className="w-3.5 h-3.5 text-dark-muted" />
+          <span className="text-dark-muted text-xs">B3:</span>
+          <span className="text-white text-xs font-medium">
+            {lastB3Date ? formatDate(lastB3Date) : '--/--/----'}
+          </span>
+        </div>
+
         <button className="p-2 hover:bg-dark-border rounded">
           <Bell className="w-4 h-4 text-dark-muted" />
         </button>

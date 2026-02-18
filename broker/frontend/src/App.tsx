@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Chart from './components/Chart'
 import StockList from './components/StockList'
 import TopBar from './components/TopBar'
 import LeftBar from './components/LeftBar'
 import api from './services/api'
+import { LayoutGrid } from 'lucide-react'
 
 export interface Stock {
   symbol: string
@@ -22,74 +23,224 @@ export interface CandleData {
   volume: number
 }
 
+type LayoutMode = 1 | 2 | 3
+
+interface ChartPanel {
+  stock: Stock | null
+  candleData: CandleData[]
+}
+
 function App() {
   const [stocks, setStocks] = useState<Stock[]>([])
-  const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
-  const [candleData, setCandleData] = useState<CandleData[]>([])
   const [loading, setLoading] = useState(true)
+  const [lastB3Date, setLastB3Date] = useState<string | null>(null)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null)
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(1)
+  const [panels, setPanels] = useState<ChartPanel[]>([
+    { stock: null, candleData: [] },
+    { stock: null, candleData: [] },
+    { stock: null, candleData: [] },
+  ])
+  const [activePanel, setActivePanel] = useState(0)
 
-  useEffect(() => {
-    loadStocks()
-  }, [])
-
-  useEffect(() => {
-    if (selectedStock) {
-      loadCandleData(selectedStock.symbol)
-    }
-  }, [selectedStock])
-
-  const loadStocks = async () => {
-    try {
-      const data = await api.getStocks()
-      setStocks(data)
-      if (data.length > 0 && !selectedStock) {
-        setSelectedStock(data[0])
-      }
-    } catch (error) {
-      console.error('Error loading stocks:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadCandleData = async (symbol: string) => {
+  const loadCandleData = useCallback(async (symbol: string, panelIndex: number) => {
     try {
       const data = await api.getCandleData(symbol)
-      setCandleData(data)
+      setPanels(prev => {
+        const updated = [...prev]
+        updated[panelIndex] = { ...updated[panelIndex], candleData: data }
+        return updated
+      })
     } catch (error) {
       console.error('Error loading candle data:', error)
     }
-  }
+  }, [])
+
+  // Auto-update on startup
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        // Show updating message immediately
+        setIsUpdating(true)
+        setUpdateMessage('Atualizando histórico de cotações B3...')
+
+        // Load existing data first
+        const stocksData = await api.getStocks()
+        setStocks(stocksData)
+
+        // Select first stock for panel 0
+        if (stocksData.length > 0) {
+          setPanels(prev => {
+            const updated = [...prev]
+            updated[0] = { ...updated[0], stock: stocksData[0] }
+            // Pre-assign different stocks to other panels
+            if (stocksData.length > 1) {
+              updated[1] = { ...updated[1], stock: stocksData[1] }
+            }
+            if (stocksData.length > 2) {
+              updated[2] = { ...updated[2], stock: stocksData[2] }
+            }
+            return updated
+          })
+        }
+
+        // Get last update info
+        const lastUpdate = await api.getLastUpdate()
+        setLastB3Date(lastUpdate.last_date)
+
+        // Try to ingest current year data
+        const currentYear = new Date().getFullYear()
+        try {
+          const result = await api.ingestB3(currentYear)
+          setUpdateMessage(`Atualizado: ${result.price_records} registros de ${result.stocks_processed} ações`)
+
+          // Reload data after ingestion
+          const updatedStocks = await api.getStocks()
+          setStocks(updatedStocks)
+
+          const updatedLastUpdate = await api.getLastUpdate()
+          setLastB3Date(updatedLastUpdate.last_date)
+
+          // Update selected stocks in panels
+          if (updatedStocks.length > 0) {
+            setPanels(prev => {
+              const updated = [...prev]
+              updated[0] = { ...updated[0], stock: updatedStocks[0] }
+              if (updatedStocks.length > 1) {
+                updated[1] = { ...updated[1], stock: updatedStocks[1] }
+              }
+              if (updatedStocks.length > 2) {
+                updated[2] = { ...updated[2], stock: updatedStocks[2] }
+              }
+              return updated
+            })
+          }
+        } catch {
+          // Ingestion may fail if data already cached or network issue
+          setUpdateMessage('Histórico B3 carregado')
+        }
+      } catch (error) {
+        console.error('Error initializing app:', error)
+        setUpdateMessage('Erro ao carregar dados')
+      } finally {
+        setIsUpdating(false)
+        setLoading(false)
+        // Clear success message after 5 seconds
+        setTimeout(() => setUpdateMessage(null), 5000)
+      }
+    }
+
+    initializeApp()
+  }, [])
+
+  // Load candle data when panel stocks change
+  useEffect(() => {
+    panels.forEach((panel, index) => {
+      if (panel.stock && panel.candleData.length === 0) {
+        loadCandleData(panel.stock.symbol, index)
+      }
+    })
+  }, [panels, loadCandleData])
 
   const handleStockSelect = (stock: Stock) => {
-    setSelectedStock(stock)
+    setPanels(prev => {
+      const updated = [...prev]
+      updated[activePanel] = { stock, candleData: [] }
+      return updated
+    })
+    loadCandleData(stock.symbol, activePanel)
+  }
+
+  const cycleLayout = () => {
+    setLayoutMode(prev => {
+      const next = ((prev % 3) + 1) as LayoutMode
+      return next
+    })
   }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-dark-bg">
-        <div className="text-dark-muted">Loading...</div>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+          <div className="text-dark-muted">Carregando...</div>
+          {updateMessage && (
+            <div className="text-blue-400 text-sm">{updateMessage}</div>
+          )}
+        </div>
       </div>
     )
   }
 
+  const getLayoutClass = () => {
+    switch (layoutMode) {
+      case 1: return 'grid-cols-1'
+      case 2: return 'grid-cols-2'
+      case 3: return 'grid-cols-3'
+    }
+  }
+
   return (
     <div className="flex flex-col h-screen bg-dark-bg">
-      <TopBar selectedStock={selectedStock} />
+      <TopBar
+        selectedStock={panels[activePanel].stock}
+        lastB3Date={lastB3Date}
+        isUpdating={isUpdating}
+        updateMessage={updateMessage}
+      />
 
       <div className="flex flex-1 overflow-hidden">
         <LeftBar />
 
         <div className="flex-1 flex flex-col">
-          <Chart
-            data={candleData}
-            selectedStock={selectedStock}
-          />
+          {/* Layout control bar */}
+          <div className="flex items-center justify-between px-4 py-1 bg-dark-card border-b border-dark-border">
+            <div className="flex items-center gap-2">
+              {layoutMode > 1 && Array.from({ length: layoutMode }).map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setActivePanel(i)}
+                  className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                    activePanel === i
+                      ? 'text-white bg-blue-600'
+                      : 'text-dark-muted hover:text-white bg-dark-border/50'
+                  }`}
+                >
+                  {panels[i].stock?.symbol || `Tela ${i + 1}`}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={cycleLayout}
+              title={`Layout: ${layoutMode} tela${layoutMode > 1 ? 's' : ''}`}
+              className="flex items-center gap-1.5 px-2 py-1 text-xs text-dark-muted hover:text-white hover:bg-dark-border rounded transition-colors"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>{layoutMode} Tela{layoutMode > 1 ? 's' : ''}</span>
+            </button>
+          </div>
+
+          {/* Chart panels */}
+          <div className={`flex-1 grid ${getLayoutClass()} gap-px bg-dark-border`}>
+            {Array.from({ length: layoutMode }).map((_, i) => (
+              <div
+                key={i}
+                onClick={() => setActivePanel(i)}
+                className={`relative ${activePanel === i && layoutMode > 1 ? 'ring-1 ring-blue-500/50' : ''}`}
+              >
+                <Chart
+                  data={panels[i].candleData}
+                  selectedStock={panels[i].stock}
+                />
+              </div>
+            ))}
+          </div>
         </div>
 
         <StockList
           stocks={stocks}
-          selectedStock={selectedStock}
+          selectedStock={panels[activePanel].stock}
           onStockSelect={handleStockSelect}
         />
       </div>
