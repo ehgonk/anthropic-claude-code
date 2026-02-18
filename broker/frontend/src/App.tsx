@@ -61,72 +61,62 @@ function App() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        // Show updating message immediately
-        setIsUpdating(true)
-        setUpdateMessage('Atualizando histórico de cotações B3...')
-
-        // Load existing data first
+        // Load existing data first (fast - from DB)
         const stocksData = await api.getStocks()
         setStocks(stocksData)
 
-        // Select first stock for panel 0
         if (stocksData.length > 0) {
           setPanels(prev => {
             const updated = [...prev]
             updated[0] = { ...updated[0], stock: stocksData[0] }
-            // Pre-assign different stocks to other panels
-            if (stocksData.length > 1) {
-              updated[1] = { ...updated[1], stock: stocksData[1] }
-            }
-            if (stocksData.length > 2) {
-              updated[2] = { ...updated[2], stock: stocksData[2] }
-            }
+            if (stocksData.length > 1) updated[1] = { ...updated[1], stock: stocksData[1] }
+            if (stocksData.length > 2) updated[2] = { ...updated[2], stock: stocksData[2] }
             return updated
           })
         }
 
-        // Get last update info
+        // Get last update info (fast - from DB)
         const lastUpdate = await api.getLastUpdate()
         setLastB3Date(lastUpdate.last_date)
 
-        // Try to ingest current year data
+        // Show app immediately - don't block on ingest
+        setLoading(false)
+
+        // Run ingest in background (non-blocking)
+        setIsUpdating(true)
+        setUpdateMessage('Atualizando histórico de cotações B3...')
+
         const currentYear = new Date().getFullYear()
         try {
           const result = await api.ingestB3(currentYear)
           setUpdateMessage(`Atualizado: ${result.price_records} registros de ${result.stocks_processed} ações`)
 
-          // Reload data after ingestion
           const updatedStocks = await api.getStocks()
           setStocks(updatedStocks)
 
           const updatedLastUpdate = await api.getLastUpdate()
           setLastB3Date(updatedLastUpdate.last_date)
 
-          // Update selected stocks in panels
+          // Refresh panel stocks with updated data
           if (updatedStocks.length > 0) {
-            setPanels(prev => {
-              const updated = [...prev]
-              updated[0] = { ...updated[0], stock: updatedStocks[0] }
-              if (updatedStocks.length > 1) {
-                updated[1] = { ...updated[1], stock: updatedStocks[1] }
-              }
-              if (updatedStocks.length > 2) {
-                updated[2] = { ...updated[2], stock: updatedStocks[2] }
-              }
-              return updated
-            })
+            setPanels(prev => prev.map((panel) => {
+              if (!panel.stock) return panel
+              const updated = updatedStocks.find(s => s.symbol === panel.stock!.symbol)
+              return updated ? { ...panel, stock: updated } : panel
+            }))
           }
         } catch {
-          // Ingestion may fail if data already cached or network issue
-          setUpdateMessage('Histórico B3 carregado')
+          // Ingest may fail (network, 403, etc.) - keep existing data
+          setUpdateMessage(lastUpdate.last_date
+            ? `Usando dados de ${lastUpdate.last_date}`
+            : 'Dados B3 carregados do cache local')
         }
       } catch (error) {
         console.error('Error initializing app:', error)
-        setUpdateMessage('Erro ao carregar dados')
+        setLoading(false)
+        setUpdateMessage('Erro ao conectar com o backend')
       } finally {
         setIsUpdating(false)
-        setLoading(false)
-        // Clear success message after 5 seconds
         setTimeout(() => setUpdateMessage(null), 5000)
       }
     }
@@ -164,10 +154,7 @@ function App() {
       <div className="flex items-center justify-center h-screen bg-dark-bg">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-          <div className="text-dark-muted">Carregando...</div>
-          {updateMessage && (
-            <div className="text-blue-400 text-sm">{updateMessage}</div>
-          )}
+          <div className="text-dark-muted text-sm">Carregando dados...</div>
         </div>
       </div>
     )
