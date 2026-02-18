@@ -242,9 +242,9 @@ export default function Chart({ data, selectedStock, isDark = true }: ChartProps
   }
 
   return (
-    <div className="h-full flex flex-col bg-dark-card">
+    <div className="h-full flex flex-col bg-dark-card overflow-hidden">
       {/* Chart header */}
-      <div className="flex items-center gap-4 px-4 py-2 border-b border-dark-border">
+      <div className="flex items-center gap-4 px-4 py-2 border-b border-dark-border shrink-0">
         <div className="flex items-center gap-2">
           <span className="text-dark-text font-semibold text-lg">
             {selectedStock?.symbol || 'Select a stock'}
@@ -281,7 +281,9 @@ export default function Chart({ data, selectedStock, isDark = true }: ChartProps
       </div>
 
       {/* Chart container */}
-      <div ref={chartContainerRef} className="flex-1" />
+      <div className="flex-1 relative min-h-0">
+        <div ref={chartContainerRef} className="absolute inset-0" />
+      </div>
     </div>
   )
 }

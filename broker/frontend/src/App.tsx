@@ -214,7 +214,7 @@ function App() {
               <div
                 key={i}
                 onClick={() => setActivePanel(i)}
-                className={`relative min-w-0 min-h-0 ${activePanel === i && totalPanels > 1 ? 'ring-1 ring-inset ring-blue-500/50' : ''}`}
+                className={`relative min-w-0 min-h-0 overflow-hidden ${activePanel === i && totalPanels > 1 ? 'ring-1 ring-inset ring-blue-500/50' : ''}`}
               >
                 <Chart
                   data={panels[i].candleData}
