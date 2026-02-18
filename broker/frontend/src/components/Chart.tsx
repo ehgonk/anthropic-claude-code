@@ -242,7 +242,7 @@ export default function Chart({ data, selectedStock, isDark = true }: ChartProps
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-dark-card">
+    <div className="h-full flex flex-col bg-dark-card">
       {/* Chart header */}
       <div className="flex items-center gap-4 px-4 py-2 border-b border-dark-border">
         <div className="flex items-center gap-2">
