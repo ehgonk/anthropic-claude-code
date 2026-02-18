@@ -40,7 +40,7 @@ nohup "$BACKEND_DIR/.venv/bin/uvicorn" app.main:app \
 pkill -f "vite.*5174" 2>/dev/null || true
 sleep 1
 cd "$FRONTEND_DIR"
-nohup node node_modules/.bin/vite --host 0.0.0.0 --port 5174 \
+nohup node node_modules/.bin/vite --host 0.0.0.0 --port 5174 --force \
   > /tmp/broker-frontend.log 2>&1 &
 cd "$PROJECT_DIR"
 
