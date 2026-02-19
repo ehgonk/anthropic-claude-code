@@ -12,6 +12,8 @@ export default function ThemeSwitcher({ currentTheme, onThemeChange }: ThemeSwit
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  console.log('🎨 ThemeSwitcher rendered, currentTheme:', currentTheme)
+
   const themes = [
     { id: 'system' as const, label: 'Padrão Sistema', icon: Monitor },
     { id: 'light' as const, label: 'Claro', icon: Sun },
