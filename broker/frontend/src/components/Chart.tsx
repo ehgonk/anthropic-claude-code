@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createChart, IChartApi, ISeriesApi, CandlestickData, HistogramData } from 'lightweight-charts'
 import type { Stock, CandleData } from '../App'
 
@@ -10,71 +10,47 @@ interface ChartProps {
   isDark?: boolean
 }
 
-/**
- * Aggregate daily candles into a higher timeframe.
- *
- * Rules (TradingView standard):
- * - Open  = first candle's open in the period
- * - High  = max high across all candles in the period
- * - Low   = min low across all candles in the period
- * - Close = last candle's close in the period
- * - Volume = sum of all volumes in the period
- */
 function aggregateCandles(dailyData: CandleData[], period: ChartPeriod): CandleData[] {
   if (period === '1D' || dailyData.length === 0) return dailyData
 
   const getGroupKey = (dateStr: string): string => {
     const d = new Date(dateStr + 'T00:00:00')
     const year = d.getFullYear()
-    const month = d.getMonth() // 0-based
+    const month = d.getMonth()
 
     switch (period) {
       case '1W': {
-        // ISO week: Monday-start week
-        // Get the Monday of this week
-        const day = d.getDay() // 0=Sun, 1=Mon, ..., 6=Sat
-        const diff = day === 0 ? -6 : 1 - day // offset to Monday
+        const day = d.getDay()
+        const diff = day === 0 ? -6 : 1 - day
         const monday = new Date(d)
         monday.setDate(d.getDate() + diff)
         return monday.toISOString().slice(0, 10)
       }
-      case '1M': {
-        // Monthly: group by YYYY-MM
+      case '1M':
         return `${year}-${String(month + 1).padStart(2, '0')}`
-      }
       case '3M': {
-        // Quarterly: Q1=Jan-Mar, Q2=Apr-Jun, Q3=Jul-Sep, Q4=Oct-Dec
         const quarter = Math.floor(month / 3) + 1
         return `${year}-Q${quarter}`
       }
-      case '1Y': {
-        // Yearly: group by year
+      case '1Y':
         return `${year}`
-      }
       default:
         return dateStr
     }
   }
 
-  // Group candles by period key, maintaining order
   const groups: Map<string, CandleData[]> = new Map()
   for (const candle of dailyData) {
     const key = getGroupKey(candle.time)
-    if (!groups.has(key)) {
-      groups.set(key, [])
-    }
+    if (!groups.has(key)) groups.set(key, [])
     groups.get(key)!.push(candle)
   }
 
-  // Aggregate each group
   const result: CandleData[] = []
   for (const [, candles] of groups) {
     if (candles.length === 0) continue
-
-    // Use the first trading day's date as the candle timestamp
     const firstCandle = candles[0]
     const lastCandle = candles[candles.length - 1]
-
     result.push({
       time: firstCandle.time,
       open: firstCandle.open,
@@ -84,7 +60,6 @@ function aggregateCandles(dailyData: CandleData[], period: ChartPeriod): CandleD
       volume: candles.reduce((sum, c) => sum + c.volume, 0),
     })
   }
-
   return result
 }
 
@@ -112,90 +87,91 @@ export default function Chart({ data, selectedStock, isDark = true }: ChartProps
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const [period, setPeriod] = useState<ChartPeriod>('1D')
+  const [chartReady, setChartReady] = useState(false)
 
-  useLayoutEffect(() => {
+  // Create chart once container is mounted
+  useEffect(() => {
     const container = chartContainerRef.current
     if (!container) return
 
     const theme = isDark ? darkChartTheme : lightChartTheme
 
-    // Wait for container to have dimensions
-    const initChart = () => {
-      const chart = createChart(container, {
-        autoSize: true,
-        layout: {
-          background: { color: theme.background },
-          textColor: theme.text,
-          attributionLogo: false,
+    const chart = createChart(container, {
+      width: container.clientWidth || 300,
+      height: container.clientHeight || 300,
+      layout: {
+        background: { color: theme.background },
+        textColor: theme.text,
+        attributionLogo: false,
+      },
+      grid: {
+        vertLines: { color: theme.grid },
+        horzLines: { color: theme.grid },
+      },
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: false,
+        borderColor: theme.border,
+      },
+      rightPriceScale: {
+        borderColor: theme.border,
+      },
+      crosshair: {
+        horzLine: {
+          color: theme.crosshair,
+          labelBackgroundColor: theme.crosshairLabel,
         },
-        grid: {
-          vertLines: { color: theme.grid },
-          horzLines: { color: theme.grid },
+        vertLine: {
+          color: theme.crosshair,
+          labelBackgroundColor: theme.crosshairLabel,
         },
-        timeScale: {
-          timeVisible: true,
-          secondsVisible: false,
-          borderColor: theme.border,
-        },
-        rightPriceScale: {
-          borderColor: theme.border,
-        },
-        crosshair: {
-          horzLine: {
-            color: theme.crosshair,
-            labelBackgroundColor: theme.crosshairLabel,
-          },
-          vertLine: {
-            color: theme.crosshair,
-            labelBackgroundColor: theme.crosshairLabel,
-          },
-        },
-      })
-
-      const candlestickSeries = chart.addCandlestickSeries({
-        upColor: '#26a69a',
-        downColor: '#ef5350',
-        borderUpColor: '#26a69a',
-        borderDownColor: '#ef5350',
-        wickUpColor: '#26a69a',
-        wickDownColor: '#ef5350',
-      })
-
-      const volumeSeries = chart.addHistogramSeries({
-        color: '#26a69a',
-        priceFormat: {
-          type: 'volume',
-        },
-        priceScaleId: '',
-      })
-
-      volumeSeries.priceScale().applyOptions({
-        scaleMargins: {
-          top: 0.7,
-          bottom: 0,
-        },
-      })
-
-      chartRef.current = chart
-      candlestickSeriesRef.current = candlestickSeries
-      volumeSeriesRef.current = volumeSeries
-    }
-
-    // Use rAF to ensure DOM has been laid out and container has dimensions
-    const rafId = requestAnimationFrame(() => {
-      initChart()
+      },
     })
 
-    return () => {
-      cancelAnimationFrame(rafId)
-      if (chartRef.current) {
-        chartRef.current.remove()
-        chartRef.current = null
-        candlestickSeriesRef.current = null
-        volumeSeriesRef.current = null
+    const candlestickSeries = chart.addCandlestickSeries({
+      upColor: '#26a69a',
+      downColor: '#ef5350',
+      borderUpColor: '#26a69a',
+      borderDownColor: '#ef5350',
+      wickUpColor: '#26a69a',
+      wickDownColor: '#ef5350',
+    })
+
+    const volumeSeries = chart.addHistogramSeries({
+      color: '#26a69a',
+      priceFormat: { type: 'volume' },
+      priceScaleId: '',
+    })
+
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.7, bottom: 0 },
+    })
+
+    chartRef.current = chart
+    candlestickSeriesRef.current = candlestickSeries
+    volumeSeriesRef.current = volumeSeries
+    setChartReady(true)
+
+    // Manual resize observer for reliable sizing
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect
+        if (width > 0 && height > 0) {
+          chart.applyOptions({ width, height })
+        }
       }
+    })
+    ro.observe(container)
+
+    return () => {
+      ro.disconnect()
+      chart.remove()
+      chartRef.current = null
+      candlestickSeriesRef.current = null
+      volumeSeriesRef.current = null
+      setChartReady(false)
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Update chart colors when theme changes
   useEffect(() => {
@@ -219,45 +195,33 @@ export default function Chart({ data, selectedStock, isDark = true }: ChartProps
     })
   }, [isDark])
 
-  // Re-render chart data when data or period changes
+  // Apply data when chart is ready and data changes
   useEffect(() => {
-    if (data.length === 0) return
+    if (!chartReady || !candlestickSeriesRef.current || !volumeSeriesRef.current || data.length === 0) return
 
-    const applyData = () => {
-      if (!candlestickSeriesRef.current || !volumeSeriesRef.current) {
-        // Chart not yet initialized (rAF pending), retry shortly
-        const retryId = requestAnimationFrame(applyData)
-        return () => cancelAnimationFrame(retryId)
-      }
+    const aggregated = aggregateCandles(data, period)
 
-      const aggregated = aggregateCandles(data, period)
+    const candleData: CandlestickData[] = aggregated.map((d) => ({
+      time: d.time,
+      open: d.open,
+      high: d.high,
+      low: d.low,
+      close: d.close,
+    }))
 
-      const candleData: CandlestickData[] = aggregated.map((d) => ({
-        time: d.time,
-        open: d.open,
-        high: d.high,
-        low: d.low,
-        close: d.close,
-      }))
+    const volumeData: HistogramData[] = aggregated.map((d) => ({
+      time: d.time,
+      value: d.volume,
+      color: d.close >= d.open ? '#26a69a80' : '#ef535080',
+    }))
 
-      const volumeData: HistogramData[] = aggregated.map((d) => ({
-        time: d.time,
-        value: d.volume,
-        color: d.close >= d.open ? '#26a69a80' : '#ef535080',
-      }))
+    candlestickSeriesRef.current.setData(candleData)
+    volumeSeriesRef.current.setData(volumeData)
 
-      candlestickSeriesRef.current.setData(candleData)
-      volumeSeriesRef.current.setData(volumeData)
-
-      if (chartRef.current) {
-        chartRef.current.timeScale().fitContent()
-      }
+    if (chartRef.current) {
+      chartRef.current.timeScale().fitContent()
     }
-
-    // Use rAF to sync with chart initialization
-    const rafId = requestAnimationFrame(applyData)
-    return () => cancelAnimationFrame(rafId)
-  }, [data, period])
+  }, [data, period, chartReady])
 
   const periods: ChartPeriod[] = ['1D', '1W', '1M', '3M', '1Y']
 
@@ -308,7 +272,7 @@ export default function Chart({ data, selectedStock, isDark = true }: ChartProps
         </div>
       </div>
 
-      {/* Chart container */}
+      {/* Chart container - uses absolute fill for reliable dimensions */}
       <div className="flex-1 relative min-h-0">
         <div ref={chartContainerRef} className="absolute inset-0" />
       </div>
