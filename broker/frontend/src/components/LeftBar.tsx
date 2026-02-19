@@ -27,7 +27,11 @@ export default function LeftBar({ activeTool, onToolSelect }: LeftBarProps) {
       {tools.map((tool) => (
         <button
           key={tool.id}
-          onClick={() => onToolSelect(tool.id)}
+          onClick={() => {
+            console.log('🔧 Tool clicked:', tool.id)
+            console.log('🔧 Current activeTool:', activeTool)
+            onToolSelect(tool.id)
+          }}
           className={`p-2 rounded transition-colors group relative ${
             activeTool === tool.id
               ? 'bg-blue-600 hover:bg-blue-700'

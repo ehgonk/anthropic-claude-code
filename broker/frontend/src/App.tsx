@@ -187,7 +187,13 @@ function App() {
       <div className="flex flex-1 overflow-hidden">
         <LeftBar
           activeTool={activeTool}
-          onToolSelect={(tool) => setActiveTool(activeTool === tool ? null : tool)}
+          onToolSelect={(tool) => {
+            console.log('📊 App: onToolSelect called with:', tool)
+            console.log('📊 App: current activeTool:', activeTool)
+            const newTool = activeTool === tool ? null : tool
+            console.log('📊 App: setting activeTool to:', newTool)
+            setActiveTool(newTool)
+          }}
         />
 
         {activeTool === 'indicators' && (
@@ -196,6 +202,11 @@ function App() {
             onToggleIndicator={toggleIndicator}
           />
         )}
+
+        {/* Debug info */}
+        <div className="fixed bottom-2 left-2 bg-black/80 text-white text-xs px-2 py-1 rounded font-mono z-50">
+          activeTool: {activeTool || 'null'}
+        </div>
 
         <div className="flex-1 flex flex-col min-w-0">
           {/* Layout control bar */}
