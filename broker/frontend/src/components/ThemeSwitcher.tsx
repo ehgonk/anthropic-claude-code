@@ -40,12 +40,16 @@ export default function ThemeSwitcher({ currentTheme, onThemeChange }: ThemeSwit
   return (
     <div className="relative" ref={dropdownRef}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded hover:bg-dark-border transition-colors"
+        onClick={() => {
+          console.log('🎨 Theme button clicked, isOpen:', !isOpen)
+          setIsOpen(!isOpen)
+        }}
+        className="flex items-center gap-1.5 px-3 py-2 rounded hover:bg-dark-border transition-colors border border-dark-border"
         title="Alterar tema"
       >
-        <CurrentIcon className="w-4 h-4 text-dark-muted" />
-        <ChevronDown className={`w-3 h-3 text-dark-muted transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <CurrentIcon className="w-4 h-4 text-dark-text" />
+        <span className="text-sm text-dark-text">{currentThemeData.label}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-dark-muted transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (

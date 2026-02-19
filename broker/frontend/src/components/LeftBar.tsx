@@ -13,6 +13,8 @@ interface LeftBarProps {
 }
 
 export default function LeftBar({ activeTool, onToolSelect }: LeftBarProps) {
+  console.log('🔧 LeftBar rendered, activeTool:', activeTool)
+
   const tools = [
     { id: 'trends', icon: TrendingUp, label: 'Trends' },
     { id: 'bars', icon: BarChart3, label: 'Bars' },
@@ -27,7 +29,10 @@ export default function LeftBar({ activeTool, onToolSelect }: LeftBarProps) {
       {tools.map((tool) => (
         <button
           key={tool.id}
-          onClick={() => onToolSelect(tool.id)}
+          onClick={() => {
+            console.log('🔧 Tool clicked:', tool.id, 'Current active:', activeTool)
+            onToolSelect(tool.id)
+          }}
           className={`p-2 rounded transition-colors group relative ${
             activeTool === tool.id
               ? 'bg-blue-600 hover:bg-blue-700'
