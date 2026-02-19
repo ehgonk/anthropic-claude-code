@@ -83,7 +83,7 @@ const lightChartTheme = {
   crosshairLabel: '#dde1ed',
 }
 
-export default function Chart({ data, selectedStock, isDark = true, activeIndicators = [] }: ChartProps) {
+export default function Chart({ data, selectedStock, isDark = false, activeIndicators = [] }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
