@@ -193,6 +193,8 @@ function App() {
   // Apply theme class on mount
   useEffect(() => {
     // Start in light mode (no 'dark' class)
+    document.documentElement.classList.remove('dark')
+    console.log('🎨 Starting in LIGHT MODE')
   }, [])
 
   if (loading) {
