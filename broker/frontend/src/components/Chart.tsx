@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createChart, IChartApi, ISeriesApi, CandlestickData, HistogramData, LineData } from 'lightweight-charts'
 import type { Stock, CandleData } from '../App'
-import { calculateSMA, calculateEMA, calculateRSI, calculateMACD, calculateBollingerBands } from '../utils/indicators'
+import { calculateSMA, calculateEMA } from '../utils/indicators'
 
 export type ChartPeriod = '1D' | '1W' | '1M' | '3M' | '1Y'
 
