@@ -74,6 +74,7 @@ export default function TopBar({ selectedStock, lastB3Date, isUpdating, updateMe
         </button>
 
         {/* Theme switcher */}
+        {(() => { console.log('📊 TopBar: About to render ThemeSwitcher'); return null; })()}
         <ThemeSwitcher currentTheme={themeMode} onThemeChange={onThemeChange} />
 
         <button className="p-2 hover:bg-dark-border rounded">
