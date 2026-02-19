@@ -1,16 +1,17 @@
-import { Menu, Settings, Bell, Database, Sun, Moon } from 'lucide-react'
+import { Menu, Settings, Bell, Database } from 'lucide-react'
 import type { Stock } from '../App'
+import ThemeSwitcher, { ThemeMode } from './ThemeSwitcher'
 
 interface TopBarProps {
   selectedStock: Stock | null
   lastB3Date: string | null
   isUpdating: boolean
   updateMessage: string | null
-  isDark: boolean
-  onToggleTheme: () => void
+  themeMode: ThemeMode
+  onThemeChange: (theme: ThemeMode) => void
 }
 
-export default function TopBar({ selectedStock, lastB3Date, isUpdating, updateMessage, isDark, onToggleTheme }: TopBarProps) {
+export default function TopBar({ selectedStock, lastB3Date, isUpdating, updateMessage, themeMode, onThemeChange }: TopBarProps) {
   const formatDate = (dateStr: string) => {
     const [year, month, day] = dateStr.split('-')
     return `${day}/${month}/${year}`
@@ -72,17 +73,8 @@ export default function TopBar({ selectedStock, lastB3Date, isUpdating, updateMe
           <Bell className="w-4 h-4 text-dark-muted" />
         </button>
 
-        {/* Theme toggle */}
-        <button
-          onClick={onToggleTheme}
-          title={isDark ? 'Modo claro' : 'Modo escuro'}
-          className="p-2 hover:bg-dark-border rounded transition-colors"
-        >
-          {isDark
-            ? <Sun className="w-4 h-4 text-dark-muted hover:text-dark-text" />
-            : <Moon className="w-4 h-4 text-dark-muted hover:text-dark-text" />
-          }
-        </button>
+        {/* Theme switcher */}
+        <ThemeSwitcher currentTheme={themeMode} onThemeChange={onThemeChange} />
 
         <button className="p-2 hover:bg-dark-border rounded">
           <Settings className="w-4 h-4 text-dark-muted" />

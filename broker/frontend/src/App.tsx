@@ -10,6 +10,7 @@ import LinesPanel from './components/LinesPanel'
 import WatchlistPanel from './components/WatchlistPanel'
 import LayersPanel from './components/LayersPanel'
 import LayoutPicker, { GridLayout, LAYOUTS } from './components/LayoutPicker'
+import type { ThemeMode } from './components/ThemeSwitcher'
 import api from './services/api'
 
 export interface Stock {
@@ -41,6 +42,7 @@ function makeEmptyPanels(): ChartPanel[] {
 }
 
 function App() {
+  const [themeMode, setThemeMode] = useState<ThemeMode>('light')
   const [isDark, setIsDark] = useState(false)
   const [stocks, setStocks] = useState<Stock[]>([])
   const [loading, setLoading] = useState(true)
@@ -150,13 +152,6 @@ function App() {
     loadCandleData(stock.symbol, activePanel)
   }
 
-  const toggleTheme = () => {
-    setIsDark(prev => {
-      const next = !prev
-      document.documentElement.classList.toggle('dark', next)
-      return next
-    })
-  }
 
   const toggleIndicator = (indicatorId: string) => {
     setActiveIndicators(prev =>
@@ -190,11 +185,38 @@ function App() {
     )
   }
 
-  // Apply theme class on mount
+  // Apply theme based on themeMode
   useEffect(() => {
-    // Start in light mode (no 'dark' class)
-    document.documentElement.classList.remove('dark')
-  }, [])
+    const applyTheme = () => {
+      let shouldBeDark = false
+
+      if (themeMode === 'system') {
+        // Use system preference
+        shouldBeDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      } else if (themeMode === 'dark') {
+        shouldBeDark = true
+      } else {
+        shouldBeDark = false
+      }
+
+      setIsDark(shouldBeDark)
+      document.documentElement.classList.toggle('dark', shouldBeDark)
+    }
+
+    applyTheme()
+
+    // Listen for system theme changes when in 'system' mode
+    if (themeMode === 'system') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+      const handleChange = () => applyTheme()
+      mediaQuery.addEventListener('change', handleChange)
+      return () => mediaQuery.removeEventListener('change', handleChange)
+    }
+  }, [themeMode])
+
+  const handleThemeChange = (newTheme: ThemeMode) => {
+    setThemeMode(newTheme)
+  }
 
   if (loading) {
     return (
@@ -216,8 +238,8 @@ function App() {
         lastB3Date={lastB3Date}
         isUpdating={isUpdating}
         updateMessage={updateMessage}
-        isDark={isDark}
-        onToggleTheme={toggleTheme}
+        themeMode={themeMode}
+        onThemeChange={handleThemeChange}
       />
 
       <div className="flex flex-1 overflow-hidden">
