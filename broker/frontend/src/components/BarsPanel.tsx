@@ -1,4 +1,4 @@
-import { BarChart3, Candlestick, Activity } from 'lucide-react'
+import { BarChart3, Activity } from 'lucide-react'
 
 interface TimeframeOption {
   id: string
@@ -43,7 +43,7 @@ export default function BarsPanel({
       id: 'candlestick',
       label: 'Candlestick',
       description: 'Gráfico de velas tradicional',
-      icon: Candlestick,
+      icon: BarChart3,
     },
     {
       id: 'bars',
