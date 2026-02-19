@@ -4,6 +4,11 @@ import StockList from './components/StockList'
 import TopBar from './components/TopBar'
 import LeftBar from './components/LeftBar'
 import IndicatorsPanel from './components/IndicatorsPanel'
+import TrendsPanel from './components/TrendsPanel'
+import BarsPanel from './components/BarsPanel'
+import LinesPanel from './components/LinesPanel'
+import WatchlistPanel from './components/WatchlistPanel'
+import LayersPanel from './components/LayersPanel'
 import LayoutPicker, { GridLayout, LAYOUTS } from './components/LayoutPicker'
 import api from './services/api'
 
@@ -47,6 +52,12 @@ function App() {
   const [activePanel, setActivePanel] = useState(0)
   const [activeTool, setActiveTool] = useState<string | null>(null)
   const [activeIndicators, setActiveIndicators] = useState<string[]>([])
+  const [activeTrends, setActiveTrends] = useState<string[]>([])
+  const [selectedTimeframe, setSelectedTimeframe] = useState('1d')
+  const [selectedCandleType, setSelectedCandleType] = useState('candlestick')
+  const [activeDrawingTool, setActiveDrawingTool] = useState<string | null>(null)
+  const [watchlist, setWatchlist] = useState<Stock[]>([])
+  const [visibleLayers, setVisibleLayers] = useState<string[]>(['volume', 'grid', 'price-labels', 'time-labels', 'last-price'])
 
   const loadCandleData = useCallback(async (symbol: string, panelIndex: number) => {
     try {
@@ -155,6 +166,30 @@ function App() {
     )
   }
 
+  const toggleTrend = (trendId: string) => {
+    setActiveTrends(prev =>
+      prev.includes(trendId)
+        ? prev.filter(id => id !== trendId)
+        : [...prev, trendId]
+    )
+  }
+
+  const handleAddToWatchlist = (stock: Stock) => {
+    setWatchlist(prev => [...prev, stock])
+  }
+
+  const handleRemoveFromWatchlist = (symbol: string) => {
+    setWatchlist(prev => prev.filter(s => s.symbol !== symbol))
+  }
+
+  const toggleLayer = (layerId: string) => {
+    setVisibleLayers(prev =>
+      prev.includes(layerId)
+        ? prev.filter(id => id !== layerId)
+        : [...prev, layerId]
+    )
+  }
+
   // Apply dark class on mount
   useEffect(() => {
     document.documentElement.classList.add('dark')
@@ -196,6 +231,30 @@ function App() {
           }}
         />
 
+        {activeTool === 'trends' && (
+          <TrendsPanel
+            activeTrends={activeTrends}
+            onToggleTrend={toggleTrend}
+          />
+        )}
+
+        {activeTool === 'bars' && (
+          <BarsPanel
+            selectedTimeframe={selectedTimeframe}
+            selectedCandleType={selectedCandleType}
+            onTimeframeChange={setSelectedTimeframe}
+            onCandleTypeChange={setSelectedCandleType}
+          />
+        )}
+
+        {activeTool === 'lines' && (
+          <LinesPanel
+            activeTool={activeDrawingTool}
+            onToolSelect={(tool) => setActiveDrawingTool(activeDrawingTool === tool ? null : tool)}
+            onClearAll={() => console.log('Clear all drawings')}
+          />
+        )}
+
         {activeTool === 'indicators' && (
           <IndicatorsPanel
             activeIndicators={activeIndicators}
@@ -203,10 +262,22 @@ function App() {
           />
         )}
 
-        {/* Debug info */}
-        <div className="fixed bottom-2 left-2 bg-black/80 text-white text-xs px-2 py-1 rounded font-mono z-50">
-          activeTool: {activeTool || 'null'}
-        </div>
+        {activeTool === 'watchlist' && (
+          <WatchlistPanel
+            watchlist={watchlist}
+            allStocks={stocks}
+            onAddToWatchlist={handleAddToWatchlist}
+            onRemoveFromWatchlist={handleRemoveFromWatchlist}
+            onSelectStock={handleStockSelect}
+          />
+        )}
+
+        {activeTool === 'layers' && (
+          <LayersPanel
+            visibleLayers={visibleLayers}
+            onToggleLayer={toggleLayer}
+          />
+        )}
 
         <div className="flex-1 flex flex-col min-w-0">
           {/* Layout control bar */}
