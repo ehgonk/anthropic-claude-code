@@ -193,6 +193,8 @@ function App() {
   // Apply dark class on mount
   useEffect(() => {
     document.documentElement.classList.add('dark')
+    console.log('🚀 APP LOADED - DEBUG MODE ACTIVE v2.0')
+    console.log('🚀 If you see this, the code is updated!')
   }, [])
 
   if (loading) {
