@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import Chart from './components/Chart'
-import TestChart from './components/TestChart'
+import SimpleTest from './components/SimpleTest'
 import StockList from './components/StockList'
 import TopBar from './components/TopBar'
 import LeftBar from './components/LeftBar'
@@ -218,7 +218,7 @@ function App() {
                 className={`relative min-w-0 min-h-0 overflow-hidden ${activePanel === i && totalPanels > 1 ? 'ring-1 ring-inset ring-blue-500/50' : ''}`}
               >
                 {i === 0 ? (
-                  <TestChart />
+                  <SimpleTest />
                 ) : (
                   <Chart
                     data={panels[i].candleData}
