@@ -41,7 +41,7 @@ function makeEmptyPanels(): ChartPanel[] {
 }
 
 function App() {
-  const [isDark, setIsDark] = useState(true)
+  const [isDark, setIsDark] = useState(false)
   const [stocks, setStocks] = useState<Stock[]>([])
   const [loading, setLoading] = useState(true)
   const [lastB3Date, setLastB3Date] = useState<string | null>(null)
@@ -190,9 +190,9 @@ function App() {
     )
   }
 
-  // Apply dark class on mount
+  // Apply theme class on mount
   useEffect(() => {
-    document.documentElement.classList.add('dark')
+    // Start in light mode (no 'dark' class)
   }, [])
 
   if (loading) {
