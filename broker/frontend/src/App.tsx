@@ -228,8 +228,16 @@ function App() {
             const newTool = activeTool === tool ? null : tool
             console.log('📊 App: setting activeTool to:', newTool)
             setActiveTool(newTool)
+            console.log('📊 App: activeTool updated to:', newTool)
           }}
         />
+
+        {/* DEBUG INDICATOR */}
+        {activeTool && (
+          <div className="fixed top-20 left-20 bg-red-500 text-white px-4 py-2 rounded z-50">
+            Active Tool: {activeTool}
+          </div>
+        )}
 
         {activeTool === 'trends' && (
           <TrendsPanel
