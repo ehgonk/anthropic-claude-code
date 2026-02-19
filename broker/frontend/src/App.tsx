@@ -50,7 +50,7 @@ function App() {
   const [layout, setLayout] = useState<GridLayout>(LAYOUTS[0]) // 1x1 default
   const [panels, setPanels] = useState<ChartPanel[]>(makeEmptyPanels())
   const [activePanel, setActivePanel] = useState(0)
-  const [activeTool, setActiveTool] = useState<string | null>('trends')
+  const [activeTool, setActiveTool] = useState<string | null>(null)
   const [activeIndicators, setActiveIndicators] = useState<string[]>([])
   const [activeTrends, setActiveTrends] = useState<string[]>([])
   const [selectedTimeframe, setSelectedTimeframe] = useState('1d')
