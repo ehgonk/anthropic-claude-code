@@ -198,10 +198,10 @@ function App() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-dark-bg">
+      <div className="flex items-center justify-center h-screen" style={{ backgroundColor: 'rgb(240, 243, 250)' }}>
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-          <div className="text-dark-muted text-sm">Carregando dados...</div>
+          <div style={{ color: 'rgb(110, 115, 126)' }} className="text-sm">Carregando dados...</div>
         </div>
       </div>
     )
