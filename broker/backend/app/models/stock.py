@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Float, Integer, DateTime, ForeignKey
+from sqlalchemy import String, Float, Integer, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..database import Base
 
@@ -21,6 +21,9 @@ class Stock(Base):
 
 class StockPrice(Base):
     __tablename__ = "stock_prices"
+    __table_args__ = (
+        UniqueConstraint('stock_id', 'date', name='uq_stock_date'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     stock_id: Mapped[int] = mapped_column(ForeignKey("stocks.id"), index=True)
