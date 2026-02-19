@@ -3,6 +3,7 @@ import Chart from './components/Chart'
 import StockList from './components/StockList'
 import TopBar from './components/TopBar'
 import LeftBar from './components/LeftBar'
+import IndicatorsPanel from './components/IndicatorsPanel'
 import LayoutPicker, { GridLayout, LAYOUTS } from './components/LayoutPicker'
 import api from './services/api'
 
@@ -44,6 +45,8 @@ function App() {
   const [layout, setLayout] = useState<GridLayout>(LAYOUTS[0]) // 1x1 default
   const [panels, setPanels] = useState<ChartPanel[]>(makeEmptyPanels())
   const [activePanel, setActivePanel] = useState(0)
+  const [activeTool, setActiveTool] = useState<string | null>(null)
+  const [activeIndicators, setActiveIndicators] = useState<string[]>([])
 
   const loadCandleData = useCallback(async (symbol: string, panelIndex: number) => {
     try {
@@ -144,6 +147,14 @@ function App() {
     })
   }
 
+  const toggleIndicator = (indicatorId: string) => {
+    setActiveIndicators(prev =>
+      prev.includes(indicatorId)
+        ? prev.filter(id => id !== indicatorId)
+        : [...prev, indicatorId]
+    )
+  }
+
   // Apply dark class on mount
   useEffect(() => {
     document.documentElement.classList.add('dark')
@@ -174,7 +185,17 @@ function App() {
       />
 
       <div className="flex flex-1 overflow-hidden">
-        <LeftBar />
+        <LeftBar
+          activeTool={activeTool}
+          onToolSelect={(tool) => setActiveTool(activeTool === tool ? null : tool)}
+        />
+
+        {activeTool === 'indicators' && (
+          <IndicatorsPanel
+            activeIndicators={activeIndicators}
+            onToggleIndicator={toggleIndicator}
+          />
+        )}
 
         <div className="flex-1 flex flex-col min-w-0">
           {/* Layout control bar */}
@@ -220,6 +241,7 @@ function App() {
                   data={panels[i].candleData}
                   selectedStock={panels[i].stock}
                   isDark={isDark}
+                  activeIndicators={activeIndicators}
                 />
               </div>
             ))}

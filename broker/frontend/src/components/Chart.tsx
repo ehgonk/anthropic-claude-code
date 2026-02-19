@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { createChart, IChartApi, ISeriesApi, CandlestickData, HistogramData } from 'lightweight-charts'
+import { createChart, IChartApi, ISeriesApi, CandlestickData, HistogramData, LineData } from 'lightweight-charts'
 import type { Stock, CandleData } from '../App'
+import { calculateSMA, calculateEMA, calculateRSI, calculateMACD, calculateBollingerBands } from '../utils/indicators'
 
 export type ChartPeriod = '1D' | '1W' | '1M' | '3M' | '1Y'
 
@@ -8,6 +9,7 @@ interface ChartProps {
   data: CandleData[]
   selectedStock: Stock | null
   isDark?: boolean
+  activeIndicators?: string[]
 }
 
 function aggregateCandles(dailyData: CandleData[], period: ChartPeriod): CandleData[] {
@@ -81,11 +83,12 @@ const lightChartTheme = {
   crosshairLabel: '#dde1ed',
 }
 
-export default function Chart({ data, selectedStock, isDark = true }: ChartProps) {
+export default function Chart({ data, selectedStock, isDark = true, activeIndicators = [] }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
+  const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
   const [period, setPeriod] = useState<ChartPeriod>('1D')
   const [chartReady, setChartReady] = useState(false)
 
@@ -222,6 +225,76 @@ export default function Chart({ data, selectedStock, isDark = true }: ChartProps
       chartRef.current.timeScale().fitContent()
     }
   }, [data, period, chartReady])
+
+  // Update indicators when activeIndicators or data changes
+  useEffect(() => {
+    if (!chartReady || !chartRef.current || data.length === 0) return
+
+    const chart = chartRef.current
+    const aggregated = aggregateCandles(data, period)
+
+    // Define indicator colors and configurations
+    const indicatorConfig: Record<string, { color: string; calculate: () => LineData[] }> = {
+      sma20: {
+        color: '#2962FF',
+        calculate: () => calculateSMA(aggregated, 20).map(d => ({ time: d.time, value: d.value })),
+      },
+      sma50: {
+        color: '#FF6D00',
+        calculate: () => calculateSMA(aggregated, 50).map(d => ({ time: d.time, value: d.value })),
+      },
+      sma200: {
+        color: '#E91E63',
+        calculate: () => calculateSMA(aggregated, 200).map(d => ({ time: d.time, value: d.value })),
+      },
+      ema9: {
+        color: '#00BCD4',
+        calculate: () => calculateEMA(aggregated, 9).map(d => ({ time: d.time, value: d.value })),
+      },
+      ema21: {
+        color: '#9C27B0',
+        calculate: () => calculateEMA(aggregated, 21).map(d => ({ time: d.time, value: d.value })),
+      },
+    }
+
+    // Remove indicators that are no longer active
+    const currentSeries = indicatorSeriesRef.current
+    for (const [id, series] of currentSeries.entries()) {
+      if (!activeIndicators.includes(id)) {
+        chart.removeSeries(series)
+        currentSeries.delete(id)
+      }
+    }
+
+    // Add or update active indicators
+    for (const indicatorId of activeIndicators) {
+      const config = indicatorConfig[indicatorId]
+      if (!config) continue
+
+      try {
+        const indicatorData = config.calculate()
+
+        if (!currentSeries.has(indicatorId)) {
+          // Create new series
+          const lineSeries = chart.addLineSeries({
+            color: config.color,
+            lineWidth: 2,
+            crosshairMarkerVisible: true,
+            lastValueVisible: true,
+            priceLineVisible: false,
+          })
+          lineSeries.setData(indicatorData)
+          currentSeries.set(indicatorId, lineSeries)
+        } else {
+          // Update existing series
+          const series = currentSeries.get(indicatorId)!
+          series.setData(indicatorData)
+        }
+      } catch (error) {
+        console.warn(`Error calculating indicator ${indicatorId}:`, error)
+      }
+    }
+  }, [chartReady, data, period, activeIndicators])
 
   const periods: ChartPeriod[] = ['1D', '1W', '1M', '3M', '1Y']
 
