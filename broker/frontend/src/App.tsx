@@ -78,7 +78,9 @@ function App() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
+        console.log('📊 Fetching stocks...')
         const stocksData = await api.getStocks()
+        console.log('📊 Stocks received:', stocksData.length)
         setStocks(stocksData)
 
         if (stocksData.length > 0) {
@@ -91,7 +93,9 @@ function App() {
           })
         }
 
+        console.log('📊 Fetching last update...')
         const lastUpdate = await api.getLastUpdate()
+        console.log('📊 Last update:', lastUpdate)
         setLastB3Date(lastUpdate.last_date)
         setLoading(false)
 
@@ -122,7 +126,8 @@ function App() {
             : 'Dados B3 carregados do cache local')
         }
       } catch (error) {
-        console.error('Error initializing app:', error)
+        console.error('❌ Error initializing app:', error)
+        console.error('❌ Error details:', JSON.stringify(error, null, 2))
         setLoading(false)
         setUpdateMessage('Erro ao conectar com o backend')
       } finally {
