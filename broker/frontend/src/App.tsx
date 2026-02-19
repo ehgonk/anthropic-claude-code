@@ -50,7 +50,7 @@ function App() {
   const [layout, setLayout] = useState<GridLayout>(LAYOUTS[0]) // 1x1 default
   const [panels, setPanels] = useState<ChartPanel[]>(makeEmptyPanels())
   const [activePanel, setActivePanel] = useState(0)
-  const [activeTool, setActiveTool] = useState<string | null>(null)
+  const [activeTool, setActiveTool] = useState<string | null>('trends')
   const [activeIndicators, setActiveIndicators] = useState<string[]>([])
   const [activeTrends, setActiveTrends] = useState<string[]>([])
   const [selectedTimeframe, setSelectedTimeframe] = useState('1d')
@@ -193,8 +193,6 @@ function App() {
   // Apply dark class on mount
   useEffect(() => {
     document.documentElement.classList.add('dark')
-    console.log('🚀 APP LOADED - DEBUG MODE ACTIVE v2.0')
-    console.log('🚀 If you see this, the code is updated!')
   }, [])
 
   if (loading) {
@@ -225,21 +223,9 @@ function App() {
         <LeftBar
           activeTool={activeTool}
           onToolSelect={(tool) => {
-            console.log('📊 App: onToolSelect called with:', tool)
-            console.log('📊 App: current activeTool:', activeTool)
-            const newTool = activeTool === tool ? null : tool
-            console.log('📊 App: setting activeTool to:', newTool)
-            setActiveTool(newTool)
-            console.log('📊 App: activeTool updated to:', newTool)
+            setActiveTool(activeTool === tool ? null : tool)
           }}
         />
-
-        {/* DEBUG INDICATOR */}
-        {activeTool && (
-          <div className="fixed top-20 left-20 bg-red-500 text-white px-4 py-2 rounded z-50">
-            Active Tool: {activeTool}
-          </div>
-        )}
 
         {activeTool === 'trends' && (
           <TrendsPanel

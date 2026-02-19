@@ -23,15 +23,11 @@ export default function LeftBar({ activeTool, onToolSelect }: LeftBarProps) {
   ]
 
   return (
-    <div className="w-14 bg-dark-card border-r border-dark-border flex flex-col items-center py-3 gap-2">
+    <div className="w-14 bg-dark-card border-r border-dark-border flex flex-col items-center py-3 gap-2 relative z-10">
       {tools.map((tool) => (
         <button
           key={tool.id}
-          onClick={() => {
-            console.log('🔧 Tool clicked:', tool.id)
-            console.log('🔧 Current activeTool:', activeTool)
-            onToolSelect(tool.id)
-          }}
+          onClick={() => onToolSelect(tool.id)}
           className={`p-2 rounded transition-colors group relative ${
             activeTool === tool.id
               ? 'bg-blue-600 hover:bg-blue-700'
