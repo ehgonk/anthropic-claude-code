@@ -55,7 +55,6 @@ async def import_from_csv():
         print("\n🗑️  Clearing existing data...")
         await conn.execute(delete(StockPrice))
         await conn.execute(delete(Stock))
-        await conn.commit()
 
         # Import stocks
         print("\n1️⃣ Importing stocks...")
@@ -64,6 +63,16 @@ async def import_from_csv():
             stocks = []
 
             for row in reader:
+                # Parse datetime string
+                updated_at = row['updated_at']
+                if updated_at and updated_at != 'None':
+                    try:
+                        updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+                    except:
+                        updated_at = datetime.utcnow()
+                else:
+                    updated_at = datetime.utcnow()
+
                 stocks.append({
                     'id': int(row['id']),
                     'symbol': row['symbol'],
@@ -71,7 +80,7 @@ async def import_from_csv():
                     'price': float(row['price']),
                     'change_percent': float(row['change_percent']),
                     'volume': int(row['volume']),
-                    'updated_at': row['updated_at']
+                    'updated_at': updated_at
                 })
 
                 if len(stocks) >= 1000:
@@ -82,7 +91,6 @@ async def import_from_csv():
             if stocks:
                 await conn.execute(insert(Stock).values(stocks))
 
-        await conn.commit()
         print(f"✅ Stocks imported")
 
         # Import stock prices
@@ -114,7 +122,6 @@ async def import_from_csv():
                 await conn.execute(insert(StockPrice).values(prices))
                 print(f"  Imported {count:,} prices...")
 
-        await conn.commit()
         print(f"✅ Stock prices imported")
 
     # Verify
