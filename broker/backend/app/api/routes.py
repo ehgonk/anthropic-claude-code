@@ -35,24 +35,6 @@ async def get_last_update(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/stocks")
-async def get_stocks(db: AsyncSession = Depends(get_db)):
-    """Get all stocks"""
-    result = await db.execute(select(Stock))
-    stocks = result.scalars().all()
-
-    return [
-        {
-            "symbol": stock.symbol,
-            "name": stock.name,
-            "price": stock.price,
-            "change_percent": stock.change_percent,
-            "volume": stock.volume,
-        }
-        for stock in stocks
-    ]
-
-
 @router.get("/stocks/{symbol}/candles")
 async def get_candle_data(symbol: str, db: AsyncSession = Depends(get_db)):
     """Get candlestick data for a symbol"""

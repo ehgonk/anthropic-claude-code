@@ -12,7 +12,6 @@ from ..models import Stock, StockPrice
 from ..schemas import (
     StockResponse,
     StockListResponse,
-    StockWithPricesResponse,
     PriceHistoryResponse,
     StockPriceResponse
 )
