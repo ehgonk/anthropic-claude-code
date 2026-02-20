@@ -9,10 +9,10 @@ from .api.routes import router
 from .api.stocks import router as stocks_router
 from .api.update import router as update_router
 from .scheduler import scheduler
-# from .logging_config import setup_logging
+from .logging_config import setup_logging
 
 # Setup logging
-# setup_logging(level="INFO")
+setup_logging(level="INFO")
 
 
 @asynccontextmanager
@@ -22,14 +22,12 @@ async def lifespan(app: FastAPI):
     await init_db()
 
     # Start auto-update scheduler (daily at 19:00 Brazil time)
-    # TODO: Fix scheduler startup issue
-    # scheduler.start(hour=19, minute=0, timezone="America/Sao_Paulo")
+    scheduler.start(hour=19, minute=0, timezone="America/Sao_Paulo")
 
     yield
 
     # Shutdown
-    # scheduler.stop()
-    pass
+    scheduler.stop()
 
 
 app = FastAPI(
@@ -49,7 +47,7 @@ app.add_middleware(
 # Include routers
 app.include_router(router)
 app.include_router(stocks_router, prefix="/api")
-# app.include_router(update_router, prefix="/api")  # Temporarily disabled to debug freeze
+app.include_router(update_router, prefix="/api")
 
 
 # Exception handlers
