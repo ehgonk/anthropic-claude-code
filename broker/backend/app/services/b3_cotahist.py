@@ -105,19 +105,35 @@ class B3CotahistService:
 
     def extract_txt_from_zip(self, zip_content: bytes) -> str:
         """
-        Extract TXT file from COTAHIST ZIP
+        Extract COTAHIST file from ZIP
+
+        Handles both old format (1994-2001, no .TXT extension) and new format (2002+, .TXT extension)
 
         Args:
             zip_content: ZIP file content as bytes
 
         Returns:
-            Content of the TXT file as string
+            Content of the COTAHIST file as string
         """
         with zipfile.ZipFile(io.BytesIO(zip_content)) as zf:
-            # COTAHIST files typically have one TXT file inside
-            txt_files = [f for f in zf.namelist() if f.upper().endswith('.TXT')]
+            files = zf.namelist()
+
+            if not files:
+                raise ValueError("Empty ZIP file")
+
+            # Strategy 1: Try .TXT files first (2002+)
+            txt_files = [f for f in files if f.upper().endswith('.TXT')]
+
+            # Strategy 2: If no .TXT, look for COTAHIST files (1994-2001)
             if not txt_files:
-                raise ValueError("No TXT file found in ZIP")
+                cotahist_files = [f for f in files if 'COTAHIST' in f.upper()]
+                if cotahist_files:
+                    txt_files = cotahist_files
+
+            # Strategy 3: If still nothing, just take the first/largest file
+            if not txt_files:
+                # Get the largest file (likely the data file)
+                txt_files = [max(zf.infolist(), key=lambda x: x.file_size).filename]
 
             txt_filename = txt_files[0]
             print(f"Extracting {txt_filename}...")
