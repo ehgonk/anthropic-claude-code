@@ -74,15 +74,20 @@ function App() {
     }
   }, [])
 
-  // Auto-update on startup
+  // Load initial data (backend handles auto-update on startup)
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        console.log('📊 Fetching stocks...')
+        console.log('📊 Loading data...')
+        setIsUpdating(true)
+        setUpdateMessage('Carregando dados da B3...')
+
+        // Fetch stocks
         const stocksData = await api.getStocks()
         console.log('📊 Stocks received:', stocksData.length)
         setStocks(stocksData)
 
+        // Set initial panel stocks
         if (stocksData.length > 0) {
           setPanels(prev => {
             const updated = [...prev]
@@ -93,41 +98,15 @@ function App() {
           })
         }
 
-        console.log('📊 Fetching last update...')
-        const lastUpdate = await api.getLastUpdate()
-        console.log('📊 Last update:', lastUpdate)
-        setLastB3Date(lastUpdate.last_date)
+        // Fetch last update date (formatted as dd/mm/yyyy)
+        const lastUpdate = await api.getLastUpdateDate()
+        console.log('📊 Last update:', lastUpdate.last_update)
+        setLastB3Date(lastUpdate.last_update)
+
+        setUpdateMessage(`Dados atualizados até ${lastUpdate.last_update}`)
         setLoading(false)
-
-        setIsUpdating(true)
-        setUpdateMessage('Atualizando histórico de cotações B3...')
-
-        const currentYear = new Date().getFullYear()
-        try {
-          const result = await api.ingestB3(currentYear)
-          setUpdateMessage(`Atualizado: ${result.price_records} registros de ${result.stocks_processed} ações`)
-
-          const updatedStocks = await api.getStocks()
-          setStocks(updatedStocks)
-
-          const updatedLastUpdate = await api.getLastUpdate()
-          setLastB3Date(updatedLastUpdate.last_date)
-
-          if (updatedStocks.length > 0) {
-            setPanels(prev => prev.map((panel) => {
-              if (!panel.stock) return panel
-              const updated = updatedStocks.find(s => s.symbol === panel.stock!.symbol)
-              return updated ? { ...panel, stock: updated } : panel
-            }))
-          }
-        } catch {
-          setUpdateMessage(lastUpdate.last_date
-            ? `Usando dados de ${lastUpdate.last_date}`
-            : 'Dados B3 carregados do cache local')
-        }
       } catch (error) {
         console.error('❌ Error initializing app:', error)
-        console.error('❌ Error details:', JSON.stringify(error, null, 2))
         setLoading(false)
         setUpdateMessage('Erro ao conectar com o backend')
       } finally {

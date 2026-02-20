@@ -32,6 +32,15 @@ Retorna status da última atualização:
 }
 ```
 
+#### `GET /api/update/last-update-date`
+Retorna data da última atualização formatada:
+```json
+{
+  "last_update": "19/02/2026",
+  "raw_date": "2026-02-19"
+}
+```
+
 #### `POST /api/update/run?force=false`
 Executa atualização em background:
 ```bash
@@ -45,22 +54,12 @@ curl -X POST "http://localhost:8001/api/update/run-sync"
 ```
 ⚠️ **Atenção**: Pode demorar vários minutos!
 
-#### `GET /api/update/schedule`
-Informações sobre agendamento:
-```json
-{
-  "enabled": true,
-  "next_run": "2026-02-21T19:00:00+00:00",
-  "timezone": "America/Sao_Paulo",
-  "schedule": "Daily at 19:00 (7 PM Brazil time)"
-}
-```
-
-### ✅ **3. Scheduler Automático**
-- **APScheduler** integrado com FastAPI
-- **Agendamento diário** às 19:00 (horário de Brasília)
-- Executa após fechamento do mercado
-- Startup/shutdown automático com o servidor
+### ✅ **3. Update Automático no Startup**
+- **Atualização incremental** ao iniciar a aplicação
+- Detecta automaticamente dados faltantes
+- Baixa apenas anos novos (não re-baixa dados existentes)
+- Executa em background durante o startup
+- **Data da última atualização** exibida no headline (dd/mm/aaaa)
 
 ### ✅ **4. Logging Estruturado**
 Logs coloridos e organizados:
@@ -80,18 +79,16 @@ source venv/bin/activate
 uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
 
-⚠️ **IMPORTANTE**: **NÃO use `--reload`** - causa conflito com APScheduler!
-
 ### Testar Manualmente
 ```bash
 # Ver status
 curl http://localhost:8001/api/update/status | jq
 
+# Ver data da última atualização
+curl http://localhost:8001/api/update/last-update-date | jq
+
 # Forçar update manual
 curl -X POST "http://localhost:8001/api/update/run?force=true"
-
-# Ver próxima execução agendada
-curl http://localhost:8001/api/update/schedule | jq
 ```
 
 ---
@@ -99,22 +96,28 @@ curl http://localhost:8001/api/update/schedule | jq
 ## 📁 Arquitetura
 
 ```
-broker/backend/app/
-├── services/
-│   └── auto_update.py       # Lógica de update incremental
-├── api/
-│   └── update.py            # Endpoints REST
-├── scheduler.py             # APScheduler integration
-├── logging_config.py        # Configuração de logs
-└── main.py                  # Integração com FastAPI
+broker/
+├── backend/app/
+│   ├── services/
+│   │   └── auto_update.py       # Lógica de update incremental
+│   ├── api/
+│   │   └── update.py            # Endpoints REST
+│   ├── logging_config.py        # Configuração de logs
+│   └── main.py                  # Integração com FastAPI
+└── frontend/src/
+    ├── services/
+    │   └── api.ts               # Cliente HTTP
+    ├── components/
+    │   └── TopBar.tsx           # Exibe data da última atualização
+    └── App.tsx                  # Carrega dados no startup
 ```
 
 ### Fluxo de Update
 
 ```
 ┌─────────────────────────┐
-│  Scheduler (19:00)      │
-│  ou Manual Trigger      │
+│  App Startup            │
+│  (Frontend/Backend)     │
 └──────────┬──────────────┘
            │
            ▼
@@ -137,54 +140,41 @@ broker/backend/app/
 │  Update Status          │
 │  - Log results          │
 │  - Store stats          │
+│  - Frontend displays    │
 └─────────────────────────┘
 ```
 
 ---
 
-## 🔧 Configuração
+## 🎨 Frontend Integration
 
-### Alterar Horário do Scheduler
-Edite `app/main.py`:
-```python
-scheduler.start(
-    hour=19,              # Hora (0-23)
-    minute=0,             # Minuto (0-59)
-    timezone="America/Sao_Paulo"
-)
+O frontend exibe a data da última atualização no **headline** (barra superior):
+
+```
+╔════════════════════════════════════════════════════════════╗
+║ Broker  |  PETR4  R$ 34.50  +1.23%  |  📊 Última atualização: 19/02/2026 ║
+╚════════════════════════════════════════════════════════════╝
 ```
 
-### Alterar Nível de Logs
-Edite `app/main.py`:
-```python
-setup_logging(level="DEBUG")  # DEBUG, INFO, WARNING, ERROR
-```
+A data é:
+- ✅ Formatada em **dd/mm/aaaa** (padrão brasileiro)
+- ✅ Buscada do endpoint `/api/update/last-update-date`
+- ✅ Atualizada automaticamente no startup
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Servidor trava no startup
-**Causa**: Uso do `--reload` com APScheduler
-
-**Solução**: Remova a flag `--reload` do uvicorn:
+### Update não executou
+Verifique os logs do startup:
 ```bash
-# ❌ NÃO fazer
-uvicorn app.main:app --reload
-
-# ✅ Fazer
-uvicorn app.main:app
+tail -100 /tmp/uvicorn*.log | grep "auto-update"
 ```
 
-### Update falha
-Verifique os logs:
+### Data não aparece no frontend
+Teste o endpoint:
 ```bash
-curl http://localhost:8001/api/update/status
-```
-
-Rode manualmente para ver erro:
-```bash
-curl -X POST http://localhost:8001/api/update/run-sync
+curl http://localhost:8001/api/update/last-update-date
 ```
 
 ---
@@ -205,13 +195,12 @@ O sistema rastreia:
 ## ✅ Testes
 
 Sistema testado e funcionando:
-- ✅ Update incremental (apenas dados novos)
-- ✅ Update forçado (re-download completo)
-- ✅ Endpoints REST (status, run, schedule)
-- ✅ Scheduler automático (diário)
+- ✅ Update incremental no startup
+- ✅ Endpoint de data formatada (dd/mm/aaaa)
+- ✅ Frontend exibe data no headline
+- ✅ Update manual via API
 - ✅ Logging estruturado
 - ✅ Tratamento de erros
-- ✅ Background tasks
 
 ---
 

@@ -8,11 +8,14 @@ from .database import init_db
 from .api.routes import router
 from .api.stocks import router as stocks_router
 from .api.update import router as update_router
-from .scheduler import scheduler
+from .services.auto_update import AutoUpdateService
 from .logging_config import setup_logging
+import logging
 
 # Setup logging
 setup_logging(level="INFO")
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -21,13 +24,19 @@ async def lifespan(app: FastAPI):
     # Startup
     await init_db()
 
-    # Start auto-update scheduler (daily at 19:00 Brazil time)
-    scheduler.start(hour=19, minute=0, timezone="America/Sao_Paulo")
+    # Run auto-update on startup (incremental update)
+    logger.info("Running auto-update on startup...")
+    try:
+        update_service = AutoUpdateService()
+        result = await update_service.run_update(force=False)
+        logger.info(f"Startup update completed: {result}")
+    except Exception as e:
+        logger.error(f"Startup update failed: {e}")
 
     yield
 
     # Shutdown
-    scheduler.stop()
+    pass
 
 
 app = FastAPI(

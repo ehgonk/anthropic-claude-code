@@ -81,6 +81,44 @@ async def run_update_sync(force: bool = False):
         raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
 
 
+@router.get("/last-update-date")
+async def get_last_update_date():
+    """
+    Get the last update date formatted as dd/mm/yyyy
+
+    Returns the date of the most recent successful update in Brazilian date format.
+    Used by frontend to display in the headline.
+    """
+    from ..database import AsyncSessionLocal
+    from ..models import StockPrice
+    from sqlalchemy import select, func
+    from datetime import datetime
+
+    async with AsyncSessionLocal() as db:
+        # Get the most recent date in the database
+        result = await db.execute(select(func.max(StockPrice.date)))
+        last_date = result.scalar()
+
+        if last_date:
+            # Convert string to date if needed
+            if isinstance(last_date, str):
+                date_obj = datetime.strptime(last_date, "%Y-%m-%d").date()
+            else:
+                date_obj = last_date
+
+            # Format as dd/mm/yyyy
+            formatted_date = date_obj.strftime("%d/%m/%Y")
+            return {
+                "last_update": formatted_date,
+                "raw_date": str(date_obj)
+            }
+        else:
+            return {
+                "last_update": "Sem dados",
+                "raw_date": None
+            }
+
+
 @router.get("/schedule")
 async def get_schedule():
     """

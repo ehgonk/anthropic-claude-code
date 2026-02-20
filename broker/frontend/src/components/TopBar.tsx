@@ -12,11 +12,6 @@ interface TopBarProps {
 }
 
 export default function TopBar({ selectedStock, lastB3Date, isUpdating, updateMessage, themeMode, onThemeChange }: TopBarProps) {
-  const formatDate = (dateStr: string) => {
-    const [year, month, day] = dateStr.split('-')
-    return `${day}/${month}/${year}`
-  }
-
   return (
     <div className="h-12 bg-dark-card border-b border-dark-border flex items-center justify-between px-4">
       <div className="flex items-center gap-4">
@@ -60,12 +55,12 @@ export default function TopBar({ selectedStock, lastB3Date, isUpdating, updateMe
           </div>
         )}
 
-        {/* Last B3 update date */}
+        {/* Last B3 update date (already formatted as dd/mm/yyyy from backend) */}
         <div className="flex items-center gap-2 px-3 py-1 bg-dark-bg rounded border border-dark-border">
           <Database className="w-3.5 h-3.5 text-dark-muted" />
-          <span className="text-dark-muted text-xs">B3:</span>
+          <span className="text-dark-muted text-xs">Última atualização:</span>
           <span className="text-dark-text text-xs font-medium">
-            {lastB3Date ? formatDate(lastB3Date) : '--/--/----'}
+            {lastB3Date || '--/--/----'}
           </span>
         </div>
 

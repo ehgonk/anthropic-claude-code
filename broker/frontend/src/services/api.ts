@@ -61,6 +61,15 @@ const api = {
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     return await response.json()
   },
+
+  async getLastUpdateDate(): Promise<{ last_update: string; raw_date: string | null }> {
+    const response = await fetch(`${API_URL}/update/last-update-date`, {
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-cache'
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    return await response.json()
+  },
 }
 
 export default api
