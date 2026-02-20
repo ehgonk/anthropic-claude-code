@@ -33,6 +33,11 @@ def parse_cotahist_line(line: str) -> dict | None:
     if market_type != 10:
         return None
 
+    # Filter: only BRL (R$) quotes
+    currency = line[52:56].strip()
+    if currency != "R$":
+        return None
+
     try:
         trade_date = datetime.strptime(line[2:10], "%Y%m%d")
     except ValueError:

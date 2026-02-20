@@ -9,7 +9,7 @@ Downloads ALL available COTAHIST files from B3 and stores them in the database.
 import asyncio
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 
 # Add parent directory to path
@@ -23,8 +23,8 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 
 # B3 COTAHIST historical data available from 1986 to current year
-# Start from 2000 for better data quality
-START_YEAR = 2000
+# Start from 1994 (year the Brazilian Real was introduced)
+START_YEAR = 1994
 END_YEAR = datetime.now().year
 
 
@@ -50,7 +50,7 @@ async def save_to_database(session, stock_data: dict) -> dict:
             price=data['price'],
             change_percent=data['change_percent'],
             volume=data['volume'],
-            updated_at=datetime.utcnow()
+            updated_at=datetime.now(timezone.utc)
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=['symbol'],
@@ -59,7 +59,7 @@ async def save_to_database(session, stock_data: dict) -> dict:
                 'price': data['price'],
                 'change_percent': data['change_percent'],
                 'volume': data['volume'],
-                'updated_at': datetime.utcnow()
+                'updated_at': datetime.now(timezone.utc)
             }
         )
 
@@ -88,9 +88,9 @@ async def save_to_database(session, stock_data: dict) -> dict:
                 close=price_data['close'],
                 volume=price_data['volume']
             )
-            # Use constraint name for upsert
+            # Use index_elements for SQLite upsert
             price_stmt = price_stmt.on_conflict_do_update(
-                constraint='uq_stock_date',
+                index_elements=['stock_id', 'date'],
                 set_={
                     'open': price_data['open'],
                     'high': price_data['high'],
