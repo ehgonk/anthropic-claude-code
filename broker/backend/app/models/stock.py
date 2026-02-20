@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Float, Integer, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import String, Float, Integer, DateTime, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..database import Base
 
@@ -23,11 +23,13 @@ class StockPrice(Base):
     __tablename__ = "stock_prices"
     __table_args__ = (
         UniqueConstraint('stock_id', 'date', name='uq_stock_date'),
+        Index('ix_stock_prices_stock_id_date', 'stock_id', 'date'),  # Composite index for range queries
+        Index('ix_stock_prices_date', 'date'),  # Index for date-based queries
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    stock_id: Mapped[int] = mapped_column(ForeignKey("stocks.id"), index=True)
-    date: Mapped[str] = mapped_column(String(10), index=True)  # Format: YYYY-MM-DD
+    stock_id: Mapped[int] = mapped_column(ForeignKey("stocks.id"))
+    date: Mapped[str] = mapped_column(String(10))  # Format: YYYY-MM-DD
     open: Mapped[float] = mapped_column(Float)
     high: Mapped[float] = mapped_column(Float)
     low: Mapped[float] = mapped_column(Float)
