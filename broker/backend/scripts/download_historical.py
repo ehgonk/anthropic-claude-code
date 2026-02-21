@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from datetime import datetime
 from sqlalchemy import select
-from app.database import async_session_maker
+from app.database import AsyncSessionLocal
 from app.models import Stock, StockPrice
 from app.services.yahoo_finance_service import yahoo_finance_service
 import logging
@@ -68,7 +68,7 @@ async def download_and_save_stocks():
     total_stocks = 0
     total_prices = 0
 
-    async with async_session_maker() as db:
+    async with AsyncSessionLocal() as db:
         for symbol, data in stock_data.items():
             try:
                 # Check if stock exists
