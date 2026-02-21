@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import Stock, StockPrice
 from ..database import AsyncSessionLocal
 from .b3_cotahist import b3_service
+from .ibovespa_service import ibovespa_service
 from ..seed import TARGET_STOCKS
 
 # Configure logger
@@ -203,6 +204,11 @@ class AutoUpdateService:
         self.status.start_run()
 
         try:
+            # Update Ibovespa index FIRST (independent from COTAHIST)
+            logger.info("🔄 Updating Ibovespa index...")
+            ibov_result = await ibovespa_service.run_incremental_update()
+            logger.info(f"✅ Ibovespa update: {ibov_result['records_inserted']} new records")
+
             async with AsyncSessionLocal() as db:
                 # Get years to update
                 if force:
@@ -219,7 +225,8 @@ class AutoUpdateService:
                         "message": "Data is already up to date",
                         "years": 0,
                         "stocks": 0,
-                        "prices": 0
+                        "prices": 0,
+                        "ibovespa": ibov_result
                     }
                     self.status.finish_run(success=True, stats=stats)
                     return stats
@@ -240,12 +247,13 @@ class AutoUpdateService:
                     "years": len(years),
                     "stocks": total_stocks,
                     "prices": total_prices,
+                    "ibovespa": ibov_result,
                     "year_details": year_stats,
                     "completed_at": datetime.utcnow().isoformat()
                 }
 
                 self.status.finish_run(success=True, stats=stats)
-                logger.info(f"Update completed: {total_stocks} stocks, {total_prices} prices")
+                logger.info(f"Update completed: {total_stocks} stocks, {total_prices} prices, Ibovespa: {ibov_result['records_inserted']} records")
 
                 return stats
 
