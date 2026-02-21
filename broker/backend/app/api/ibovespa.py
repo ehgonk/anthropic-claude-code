@@ -1,9 +1,10 @@
 """
 Ibovespa Data Management API
 
-Endpoints for managing Ibovespa historical data from B3:
+Endpoints for managing Ibovespa historical data:
 - Manual upload (CSV file)
-- Automatic download (direct from B3)
+- Automatic download from Investing.com
+- Automatic download from B3 (legacy)
 - Data information and statistics
 """
 
@@ -11,11 +12,12 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from typing import Dict, Any
 import io
 import csv
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import httpx
 
 from ..services.ibovespa_service import ibovespa_service
+from ..services.investing_service import investing_service
 
 router = APIRouter(prefix="/ibovespa", tags=["ibovespa"])
 logger = logging.getLogger(__name__)
@@ -141,13 +143,120 @@ async def get_ibovespa_info() -> Dict[str, Any]:
         }
 
 
+@router.post("/download/investing")
+async def download_from_investing(
+    days: int = 365,
+    force_full: bool = False
+) -> Dict[str, Any]:
+    """
+    Download Ibovespa data from Investing.com (RECOMMENDED)
+
+    This is the new primary method for fetching historical Ibovespa data.
+    Investing.com provides reliable access without captcha blocks.
+
+    Args:
+        days: Number of days of historical data to fetch (default: 365)
+        force_full: If True, fetch full history; if False, fetch incrementally
+
+    Returns:
+        Success: Records processed and inserted
+        Failure: Error message with alternatives
+
+    Example:
+        POST /api/ibovespa/download/investing?days=730  # Last 2 years
+    """
+    logger.info(f"🔄 Downloading Ibovespa data from Investing.com ({days} days)...")
+
+    try:
+        # Calculate date range
+        end_date = datetime.now()
+        if force_full:
+            # Full history: from 1994 (Real currency start)
+            start_date = datetime(1994, 7, 1)
+            logger.info("📥 Downloading FULL historical data from 1994...")
+        else:
+            # Incremental: fetch last N days
+            start_date = end_date - timedelta(days=days)
+            logger.info(f"📥 Downloading last {days} days...")
+
+        # Fetch data from Investing.com
+        records = await investing_service.fetch_ibovespa_historical(
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        if not records:
+            raise HTTPException(
+                status_code=404,
+                detail="No data returned from Investing.com"
+            )
+
+        logger.info(f"✅ Fetched {len(records)} records from Investing.com")
+
+        # Update database
+        inserted = await ibovespa_service.update_database(records)
+
+        return {
+            "status": "success",
+            "source": "investing.com",
+            "records_fetched": len(records),
+            "records_inserted": inserted,
+            "records_skipped": len(records) - inserted,
+            "first_date": str(records[0]['date']),
+            "last_date": str(records[-1]['date']),
+            "date_range_days": days
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error downloading from Investing.com: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "investing_download_failed",
+                "message": f"Failed to download from Investing.com: {str(e)}",
+                "alternatives": [
+                    {
+                        "method": "manual_upload",
+                        "endpoint": "POST /api/ibovespa/upload/csv",
+                        "description": "Upload CSV file manually"
+                    },
+                    {
+                        "method": "b3_download",
+                        "endpoint": "POST /api/ibovespa/download/auto",
+                        "description": "Try downloading from B3 (may have captcha)"
+                    }
+                ]
+            }
+        )
+
+
+@router.get("/test/investing")
+async def test_investing_connection() -> Dict[str, Any]:
+    """
+    Test connection to data sources (Yahoo Finance, Investing.com)
+
+    Returns:
+        Connection status for each data source
+    """
+    results = await investing_service.test_connection()
+    return {
+        "status": "tested",
+        "sources": results
+    }
+
+
 @router.post("/download/auto")
 async def download_from_b3() -> Dict[str, Any]:
     """
-    Attempt to download Ibovespa data directly from B3
+    Attempt to download Ibovespa data directly from B3 (LEGACY)
 
+    ⚠️ DEPRECATED: Use POST /api/ibovespa/download/investing instead
     ⚠️ WARNING: B3 may block automated downloads with captcha or 403 errors.
-    If this fails, use manual upload instead: POST /api/ibovespa/upload/csv
+
+    RECOMMENDED ALTERNATIVE: POST /api/ibovespa/download/investing
+    This endpoint uses Investing.com which is more reliable.
 
     This endpoint will try to download from multiple B3 sources:
     1. B3 official API (if available)
@@ -436,15 +545,23 @@ Write-Host "`n✅ PROCESSO CONCLUÍDO!" -ForegroundColor Green
 @router.get("/download-instructions")
 async def get_download_instructions() -> Dict[str, Any]:
     """
-    Get instructions for downloading Ibovespa data from B3
+    Get instructions for downloading Ibovespa data
     """
     return {
-        "title": "Como baixar dados do Ibovespa da B3",
+        "title": "Como baixar dados do Ibovespa",
         "methods": [
             {
-                "method": "automatic",
+                "method": "investing_auto",
+                "endpoint": "POST /api/ibovespa/download/investing",
+                "description": "Download automático do Investing.com (RECOMENDADO)",
+                "success_rate": "alta",
+                "recommended": True,
+                "notes": "Fonte confiável sem captcha"
+            },
+            {
+                "method": "b3_auto",
                 "endpoint": "POST /api/ibovespa/download/auto",
-                "description": "Tentar download automático da B3 (pode falhar)",
+                "description": "Download automático da B3 (LEGADO)",
                 "success_rate": "baixa",
                 "notes": "B3 pode bloquear com captcha"
             },
@@ -453,7 +570,7 @@ async def get_download_instructions() -> Dict[str, Any]:
                 "endpoint": "POST /api/ibovespa/upload/csv",
                 "description": "Upload manual de arquivo CSV",
                 "success_rate": "alta",
-                "recommended": True
+                "notes": "Alternativa para casos onde o automático falha"
             }
         ],
         "manual_steps": [

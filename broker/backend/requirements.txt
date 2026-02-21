@@ -7,3 +7,6 @@ pydantic==2.10.6
 pydantic-settings==2.7.1
 python-dateutil==2.9.0
 python-multipart==0.0.18
+beautifulsoup4==4.12.3
+lxml==5.1.0
+cloudscraper==1.2.71
