@@ -247,90 +247,100 @@ async def test_yahoo_connection() -> Dict[str, Any]:
 @router.get("/debug/yahoo")
 async def debug_yahoo_finance() -> Dict[str, Any]:
     """
-    Debug endpoint to test Yahoo Finance with different date ranges
+    Debug endpoint to test Yahoo Finance with different symbols
 
-    This will test multiple date ranges to find what works
+    This will test multiple symbols to find which one works for Ibovespa
     """
     import asyncio
 
-    async def test_range(days: int, label: str):
+    async def test_symbol(symbol: str):
+        """Test a specific symbol with yfinance"""
         try:
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days)
+            loop = asyncio.get_event_loop()
 
-            logger.info(f"Testing {label}: {start_date.date()} to {end_date.date()}")
+            def download():
+                import yfinance as yf
 
-            records = await yahoo_finance_service.fetch_ibovespa_historical(
-                start_date=start_date,
-                end_date=end_date
-            )
+                logger.info(f"Testing symbol: {symbol}")
+                ticker = yf.Ticker(symbol)
 
-            return {
-                "label": label,
-                "days": days,
-                "start_date": str(start_date.date()),
-                "end_date": str(end_date.date()),
-                "success": True,
-                "records_count": len(records),
-                "first_date": str(records[0]['date']) if records else None,
-                "last_date": str(records[-1]['date']) if records else None
-            }
+                # Try to get last 30 days
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=30)
+
+                df = ticker.history(
+                    start=start_date.strftime('%Y-%m-%d'),
+                    end=end_date.strftime('%Y-%m-%d'),
+                    interval='1d'
+                )
+
+                if df.empty:
+                    return None
+
+                # Also get some info
+                info = {}
+                try:
+                    ticker_info = ticker.info
+                    info['name'] = ticker_info.get('longName') or ticker_info.get('shortName', 'Unknown')
+                    info['symbol'] = ticker_info.get('symbol', symbol)
+                except:
+                    info['name'] = 'Info not available'
+                    info['symbol'] = symbol
+
+                return {
+                    'records_count': len(df),
+                    'first_date': df.index[0].strftime('%Y-%m-%d'),
+                    'last_date': df.index[-1].strftime('%Y-%m-%d'),
+                    'latest_close': float(df.iloc[-1]['Close']),
+                    'info': info
+                }
+
+            result = await loop.run_in_executor(None, download)
+
+            if result:
+                return {
+                    "symbol": symbol,
+                    "success": True,
+                    **result
+                }
+            else:
+                return {
+                    "symbol": symbol,
+                    "success": False,
+                    "error": "No data returned"
+                }
+
         except Exception as e:
             return {
-                "label": label,
-                "days": days,
+                "symbol": symbol,
                 "success": False,
                 "error": str(e)
             }
 
-    # Test different ranges
-    test_cases = [
-        (7, "Last 7 days"),
-        (30, "Last 30 days"),
-        (90, "Last 90 days"),
-        (365, "Last 1 year"),
-        (365 * 5, "Last 5 years"),
+    # Test different symbol variations for Ibovespa
+    symbols_to_test = [
+        "^BVSP",      # Current symbol we're using
+        "BVSP",       # Without caret
+        "^IBOV",      # Alternative with IBOV
+        "IBOV",       # IBOV without caret
+        "PETR4.SA",   # Test with a known stock (Petrobras)
+        "VALE3.SA",   # Test with another stock (Vale)
     ]
 
     results = []
-    for days, label in test_cases:
-        result = await test_range(days, label)
+    for symbol in symbols_to_test:
+        result = await test_symbol(symbol)
         results.append(result)
-        if result["success"]:
-            break  # Stop at first successful range
+        logger.info(f"Symbol {symbol}: {'✅ SUCCESS' if result['success'] else '❌ FAILED'}")
 
-    # Also try full history from 1994
-    try:
-        start_1994 = datetime(1994, 7, 1)
-        end_now = datetime.now()
-        logger.info(f"Testing FULL HISTORY: 1994-07-01 to {end_now.date()}")
-
-        records = await yahoo_finance_service.fetch_ibovespa_historical(
-            start_date=start_1994,
-            end_date=end_now
-        )
-
-        results.append({
-            "label": "Full history from 1994",
-            "start_date": "1994-07-01",
-            "end_date": str(end_now.date()),
-            "success": True,
-            "records_count": len(records),
-            "first_date": str(records[0]['date']) if records else None,
-            "last_date": str(records[-1]['date']) if records else None
-        })
-    except Exception as e:
-        results.append({
-            "label": "Full history from 1994",
-            "success": False,
-            "error": str(e)
-        })
+    successful = [r for r in results if r['success']]
 
     return {
         "status": "debug_complete",
-        "symbol": "^BVSP",
+        "total_tested": len(symbols_to_test),
+        "successful_count": len(successful),
         "tests": results,
-        "recommendation": "Use the shortest successful date range that has data"
+        "recommendation": f"Use symbol: {successful[0]['symbol']}" if successful else "None of the tested symbols returned data. Yahoo Finance might not support Brazilian market or there's a network issue."
     }
 
 
