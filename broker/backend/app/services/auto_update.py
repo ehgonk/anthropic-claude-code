@@ -257,7 +257,7 @@ class AutoUpdateService:
                 }
 
                 self.status.finish_run(success=True, stats=stats)
-                logger.info(f"Update completed: {total_stocks} stocks, {total_prices} prices, Ibovespa: {ibov_result['records_inserted']} records")
+                logger.info(f"Update completed: {total_stocks} stocks, {total_prices} prices, Ibovespa: {ibov_result.get('status', 'unknown')}")
 
                 return stats
 
