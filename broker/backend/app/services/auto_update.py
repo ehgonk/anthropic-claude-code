@@ -115,8 +115,8 @@ class AutoUpdateService:
         logger.info(f"📥 Downloading data from Yahoo Finance for year {year}")
 
         # Calculate date range for the year
-        start_date = f"{year}-01-01"
-        end_date = f"{year}-12-31"
+        start_date = datetime(year, 1, 1)
+        end_date = datetime(year, 12, 31)
 
         # Download from Yahoo Finance
         stock_records = await yahoo_finance_service.fetch_stock_data(
