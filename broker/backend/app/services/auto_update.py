@@ -1,8 +1,10 @@
 """
-Auto-update service for B3 stock data
+Auto-update service for stock data - YAHOO FINANCE ONLY
 
-This service automatically downloads and updates stock data from B3
+This service automatically downloads and updates stock data from Yahoo Finance
 on a scheduled basis (daily by default).
+
+⚠️ FONTE ÚNICA: Yahoo Finance - B3 não é mais utilizada
 """
 
 import logging
@@ -13,8 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import Stock, StockPrice
 from ..database import AsyncSessionLocal
-from .b3_cotahist import b3_service
-from .ibovespa_service import ibovespa_service
+from .yahoo_finance_service import yahoo_finance_service
 from ..seed import TARGET_STOCKS
 
 # Configure logger
@@ -107,21 +108,26 @@ class AutoUpdateService:
 
     async def update_year(self, db: AsyncSession, year: int) -> Dict[str, Any]:
         """
-        Update data for a specific year
+        Update data for a specific year using Yahoo Finance
 
         Returns statistics about the update
         """
-        logger.info(f"Updating data for year {year}")
+        logger.info(f"📥 Downloading data from Yahoo Finance for year {year}")
 
-        # Download and parse COTAHIST data
-        stock_data = await b3_service.get_stock_data(year, symbols=TARGET_STOCKS)
+        # Calculate date range for the year
+        start_date = f"{year}-01-01"
+        end_date = f"{year}-12-31"
 
-        if not stock_data:
+        # Download from Yahoo Finance
+        stock_records = await yahoo_finance_service.fetch_stock_data(
+            symbols=TARGET_STOCKS,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        if not stock_records:
             logger.warning(f"No data found for year {year}")
             return {"year": year, "stocks": 0, "prices": 0}
-
-        # Convert to stock records
-        stock_records = b3_service.df_to_stock_records(stock_data)
 
         total_prices = 0
         stocks_updated = 0
@@ -204,13 +210,12 @@ class AutoUpdateService:
         self.status.start_run()
 
         try:
-            # Ibovespa update DISABLED (manual upload only)
-            # Use POST /api/ibovespa/upload to manually upload B3 data
-            logger.info("⚠️ Ibovespa auto-update disabled (manual upload only)")
+            # Yahoo Finance is the single data source
+            logger.info("📊 Using Yahoo Finance as single data source")
             ibov_result = {
-                'status': 'manual_only',
+                'status': 'yahoo_finance',
                 'symbol': 'IBOV',
-                'message': 'Ibovespa requires manual upload from B3'
+                'message': 'Data from Yahoo Finance'
             }
 
             async with AsyncSessionLocal() as db:
