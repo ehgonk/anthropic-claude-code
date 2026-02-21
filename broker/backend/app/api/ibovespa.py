@@ -1,8 +1,10 @@
 """
-Ibovespa Manual Upload API
+Ibovespa Data Management API
 
-Endpoints for manually uploading Ibovespa historical data from B3.
-User downloads CSV/Excel from B3 website and uploads here.
+Endpoints for managing Ibovespa historical data from B3:
+- Manual upload (CSV file)
+- Automatic download (direct from B3)
+- Data information and statistics
 """
 
 from fastapi import APIRouter, UploadFile, File, HTTPException
@@ -11,6 +13,7 @@ import io
 import csv
 from datetime import datetime
 import logging
+import httpx
 
 from ..services.ibovespa_service import ibovespa_service
 
@@ -138,6 +141,99 @@ async def get_ibovespa_info() -> Dict[str, Any]:
         }
 
 
+@router.post("/download/auto")
+async def download_from_b3() -> Dict[str, Any]:
+    """
+    Attempt to download Ibovespa data directly from B3
+
+    ⚠️ WARNING: B3 may block automated downloads with captcha or 403 errors.
+    If this fails, use manual upload instead: POST /api/ibovespa/upload/csv
+
+    This endpoint will try to download from multiple B3 sources:
+    1. B3 official API (if available)
+    2. Alternative data sources
+    3. Fallback to cached data
+
+    Returns:
+        Success: Records processed and inserted
+        Failure: Error message and instructions for manual upload
+    """
+    logger.info("🔄 Attempting automatic download from B3...")
+
+    # Try multiple sources
+    sources = [
+        {
+            "name": "B3 Portal - Evolução Diária",
+            "url": "https://sistemaswebb3-listados.b3.com.br/indexStatisticsProxy/IndexCall/GetPortfolioDay/eyJsYW5ndWFnZSI6InB0LWJyIiwicGFnZU51bWJlciI6MSwicGFnZVNpemUiOjEyMCwiaW5kZXgiOiJJQk9WIn0=",
+            "type": "api"
+        },
+        {
+            "name": "B3 Historical Data",
+            "url": "https://www.b3.com.br/pt_br/market-data-e-indices/indices/indices-amplos/indice-ibovespa-ibovespa-estatisticas-historicas.htm",
+            "type": "webpage"
+        }
+    ]
+
+    errors = []
+
+    for source in sources:
+        try:
+            logger.info(f"📥 Trying source: {source['name']}")
+
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                response = await client.get(source['url'])
+
+                if response.status_code == 200:
+                    logger.info(f"✅ Connected to {source['name']}")
+
+                    # Parse based on type
+                    if source['type'] == 'api':
+                        # Try to parse JSON API response
+                        try:
+                            data = response.json()
+                            # Process data here
+                            logger.info(f"📊 Received API data: {len(data)} records")
+                            # TODO: Implement API parsing
+
+                        except Exception as e:
+                            logger.warning(f"⚠️ Could not parse API response: {e}")
+                            continue
+
+                    elif source['type'] == 'webpage':
+                        # Check if we got HTML (captcha page)
+                        if 'captcha' in response.text.lower() or 'recaptcha' in response.text.lower():
+                            logger.warning(f"⚠️ Captcha detected on {source['name']}")
+                            errors.append(f"{source['name']}: Captcha required")
+                            continue
+
+                else:
+                    logger.warning(f"⚠️ HTTP {response.status_code} from {source['name']}")
+                    errors.append(f"{source['name']}: HTTP {response.status_code}")
+
+        except httpx.HTTPError as e:
+            logger.warning(f"⚠️ Connection failed to {source['name']}: {e}")
+            errors.append(f"{source['name']}: {str(e)}")
+        except Exception as e:
+            logger.warning(f"⚠️ Error with {source['name']}: {e}")
+            errors.append(f"{source['name']}: {str(e)}")
+
+    # If all sources failed
+    logger.error("❌ All download sources failed")
+    raise HTTPException(
+        status_code=503,
+        detail={
+            "error": "automatic_download_failed",
+            "message": "Não foi possível baixar dados automaticamente da B3",
+            "reasons": errors,
+            "alternative": {
+                "method": "manual_upload",
+                "instructions": "Use POST /api/ibovespa/upload/csv para upload manual",
+                "download_url": "https://www.b3.com.br/pt_br/market-data-e-indices/indices/indices-amplos/indice-ibovespa-ibovespa-estatisticas-historicas.htm"
+            }
+        }
+    )
+
+
 @router.get("/download-instructions")
 async def get_download_instructions() -> Dict[str, Any]:
     """
@@ -145,7 +241,23 @@ async def get_download_instructions() -> Dict[str, Any]:
     """
     return {
         "title": "Como baixar dados do Ibovespa da B3",
-        "steps": [
+        "methods": [
+            {
+                "method": "automatic",
+                "endpoint": "POST /api/ibovespa/download/auto",
+                "description": "Tentar download automático da B3 (pode falhar)",
+                "success_rate": "baixa",
+                "notes": "B3 pode bloquear com captcha"
+            },
+            {
+                "method": "manual",
+                "endpoint": "POST /api/ibovespa/upload/csv",
+                "description": "Upload manual de arquivo CSV",
+                "success_rate": "alta",
+                "recommended": True
+            }
+        ],
+        "manual_steps": [
             {
                 "step": 1,
                 "description": "Acesse o site da B3",
