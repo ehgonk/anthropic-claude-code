@@ -19,7 +19,7 @@ export interface IngestResult {
 const api = {
   async getStocks(): Promise<Stock[]> {
     console.log('📡 Fetching stocks...')
-    const response = await fetch(`${API_URL}/stocks`, {
+    const response = await fetch(`${API_URL}/stocks?page_size=100`, {
       headers: { 'Accept': 'application/json' },
       cache: 'no-cache'
     })
@@ -30,8 +30,10 @@ const api = {
       throw new Error(`HTTP ${response.status}: ${text}`)
     }
     const data = await response.json()
-    console.log('✅ getStocks success:', data.length, 'stocks')
-    return data
+    // Backend returns { total, page, page_size, stocks: [...] }
+    const stocks = data.stocks || data
+    console.log('✅ getStocks success:', stocks.length, 'stocks')
+    return stocks
   },
 
   async getCandleData(symbol: string): Promise<CandleData[]> {
