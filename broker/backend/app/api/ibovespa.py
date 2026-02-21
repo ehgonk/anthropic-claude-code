@@ -244,6 +244,96 @@ async def test_yahoo_connection() -> Dict[str, Any]:
     }
 
 
+@router.get("/debug/yahoo")
+async def debug_yahoo_finance() -> Dict[str, Any]:
+    """
+    Debug endpoint to test Yahoo Finance with different date ranges
+
+    This will test multiple date ranges to find what works
+    """
+    import asyncio
+
+    async def test_range(days: int, label: str):
+        try:
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days)
+
+            logger.info(f"Testing {label}: {start_date.date()} to {end_date.date()}")
+
+            records = await yahoo_finance_service.fetch_ibovespa_historical(
+                start_date=start_date,
+                end_date=end_date
+            )
+
+            return {
+                "label": label,
+                "days": days,
+                "start_date": str(start_date.date()),
+                "end_date": str(end_date.date()),
+                "success": True,
+                "records_count": len(records),
+                "first_date": str(records[0]['date']) if records else None,
+                "last_date": str(records[-1]['date']) if records else None
+            }
+        except Exception as e:
+            return {
+                "label": label,
+                "days": days,
+                "success": False,
+                "error": str(e)
+            }
+
+    # Test different ranges
+    test_cases = [
+        (7, "Last 7 days"),
+        (30, "Last 30 days"),
+        (90, "Last 90 days"),
+        (365, "Last 1 year"),
+        (365 * 5, "Last 5 years"),
+    ]
+
+    results = []
+    for days, label in test_cases:
+        result = await test_range(days, label)
+        results.append(result)
+        if result["success"]:
+            break  # Stop at first successful range
+
+    # Also try full history from 1994
+    try:
+        start_1994 = datetime(1994, 7, 1)
+        end_now = datetime.now()
+        logger.info(f"Testing FULL HISTORY: 1994-07-01 to {end_now.date()}")
+
+        records = await yahoo_finance_service.fetch_ibovespa_historical(
+            start_date=start_1994,
+            end_date=end_now
+        )
+
+        results.append({
+            "label": "Full history from 1994",
+            "start_date": "1994-07-01",
+            "end_date": str(end_now.date()),
+            "success": True,
+            "records_count": len(records),
+            "first_date": str(records[0]['date']) if records else None,
+            "last_date": str(records[-1]['date']) if records else None
+        })
+    except Exception as e:
+        results.append({
+            "label": "Full history from 1994",
+            "success": False,
+            "error": str(e)
+        })
+
+    return {
+        "status": "debug_complete",
+        "symbol": "^BVSP",
+        "tests": results,
+        "recommendation": "Use the shortest successful date range that has data"
+    }
+
+
 @router.post("/download/auto")
 async def download_from_b3() -> Dict[str, Any]:
     """
