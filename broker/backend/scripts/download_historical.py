@@ -21,6 +21,7 @@ from sqlalchemy import select
 from app.database import AsyncSessionLocal
 from app.models import Stock, StockPrice
 from app.services.yahoo_finance_service import yahoo_finance_service
+from app.config.b3_stocks import ALL_B3_STOCKS
 import logging
 
 # Configure logging
@@ -43,14 +44,15 @@ async def download_and_save_stocks():
     logger.info("📥 DOWNLOAD DE DADOS HISTÓRICOS - YAHOO FINANCE")
     logger.info("=" * 70)
     logger.info(f"📅 Período: {start_date.date()} até {end_date.date()}")
-    logger.info(f"📊 Ações: {len(yahoo_finance_service.POPULAR_STOCKS)} símbolos")
+    logger.info(f"📊 Ações B3: {len(ALL_B3_STOCKS)} símbolos")
     logger.info(f"💰 Moeda: R$ (Real)")
     logger.info("")
 
     # Fetch data from Yahoo Finance
     logger.info("🔍 Buscando dados do Yahoo Finance...")
+    logger.info(f"⚠️  Isso pode demorar vários minutos...")
     stock_data = await yahoo_finance_service.fetch_stock_data(
-        symbols=yahoo_finance_service.POPULAR_STOCKS,
+        symbols=ALL_B3_STOCKS,
         start_date=start_date,
         end_date=end_date
     )
