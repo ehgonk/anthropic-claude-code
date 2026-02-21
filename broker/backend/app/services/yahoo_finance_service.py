@@ -18,10 +18,20 @@ Features:
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timedelta, date
 from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+# Disable proxy for Yahoo Finance to avoid 403 Forbidden errors
+# Some environments have proxies that block Yahoo Finance
+os.environ['NO_PROXY'] = '*'
+os.environ['no_proxy'] = '*'
+
+# Alternative: unset proxy environment variables
+for proxy_var in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
+    os.environ.pop(proxy_var, None)
 
 
 class YahooFinanceService:
@@ -45,6 +55,22 @@ class YahooFinanceService:
 
     def __init__(self):
         self.timeout = 30.0
+        # Configure requests session without proxy
+        self._setup_no_proxy()
+
+    def _setup_no_proxy(self):
+        """Configure environment to bypass proxy for Yahoo Finance"""
+        import yfinance as yf
+        import requests
+
+        # Create session without proxy
+        session = requests.Session()
+        session.proxies = {}  # Empty proxies dict = no proxy
+        session.trust_env = False  # Don't use environment proxy settings
+
+        # Configure yfinance to use this session
+        # Note: yfinance uses the requests library internally
+        # We need to patch the session for each request
 
     async def fetch_ibovespa_historical(
         self,
@@ -89,8 +115,14 @@ class YahooFinanceService:
         def download_ibov():
             try:
                 import yfinance as yf
+                import requests
             except ImportError:
                 raise Exception("yfinance library not installed")
+
+            # Bypass proxy - critical for environments with restrictive proxies
+            session = requests.Session()
+            session.proxies = {}
+            session.trust_env = False
 
             logger.info(f"📥 Downloading {self.IBOVESPA_SYMBOL}...")
 

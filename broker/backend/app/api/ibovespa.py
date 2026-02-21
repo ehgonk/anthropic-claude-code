@@ -244,6 +244,80 @@ async def test_yahoo_connection() -> Dict[str, Any]:
     }
 
 
+@router.get("/test/yahoo-raw")
+async def test_yahoo_raw() -> Dict[str, Any]:
+    """
+    Raw test of yf.download() method
+
+    Tests if yf.download() can fetch Brazilian stock data
+    """
+    import asyncio
+
+    async def test_download():
+        loop = asyncio.get_event_loop()
+
+        def download():
+            import yfinance as yf
+            from datetime import datetime, timedelta
+
+            # Test with VALE3.SA - recent data
+            symbol = "VALE3.SA"
+            logger.info(f"Testing yf.download() with {symbol}")
+
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=30)
+
+            df = yf.download(
+                symbol,
+                start=start_date.strftime('%Y-%m-%d'),
+                end=end_date.strftime('%Y-%m-%d'),
+                interval='1d',
+                progress=False,
+                auto_adjust=False
+            )
+
+            if df.empty:
+                return {
+                    "success": False,
+                    "symbol": symbol,
+                    "message": "DataFrame is empty"
+                }
+
+            return {
+                "success": True,
+                "symbol": symbol,
+                "records_count": len(df),
+                "first_date": df.index[0].strftime('%Y-%m-%d'),
+                "last_date": df.index[-1].strftime('%Y-%m-%d'),
+                "latest_close": float(df.iloc[-1]['Close']),
+                "sample_data": {
+                    "open": float(df.iloc[-1]['Open']),
+                    "high": float(df.iloc[-1]['High']),
+                    "low": float(df.iloc[-1]['Low']),
+                    "close": float(df.iloc[-1]['Close']),
+                    "volume": int(df.iloc[-1]['Volume'])
+                }
+            }
+
+        result = await loop.run_in_executor(None, download)
+        return result
+
+    try:
+        result = await test_download()
+        return {
+            "status": "test_complete",
+            "method": "yf.download()",
+            **result
+        }
+    except Exception as e:
+        logger.error(f"Test failed: {e}")
+        return {
+            "status": "test_failed",
+            "method": "yf.download()",
+            "error": str(e)
+        }
+
+
 @router.get("/debug/yahoo")
 async def debug_yahoo_finance() -> Dict[str, Any]:
     """
