@@ -94,7 +94,7 @@ async def get_stock_prices(
     symbol: str,
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    limit: int = Query(365, ge=1, le=10000, description="Maximum number of records"),
+    limit: int = Query(10000, ge=1, le=10000, description="Maximum number of records"),
     db: AsyncSession = Depends(get_db)
 ):
     """
