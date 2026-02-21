@@ -244,177 +244,68 @@ async def test_yahoo_connection() -> Dict[str, Any]:
     }
 
 
-@router.get("/test/yahoo-raw")
-async def test_yahoo_raw() -> Dict[str, Any]:
-    """
-    Raw test of yf.download() method
-
-    Tests if yf.download() can fetch Brazilian stock data
-    """
-    import asyncio
-
-    async def test_download():
-        loop = asyncio.get_event_loop()
-
-        def download():
-            import yfinance as yf
-            from datetime import datetime, timedelta
-
-            # Test with VALE3.SA - recent data
-            symbol = "VALE3.SA"
-            logger.info(f"Testing yf.download() with {symbol}")
-
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=30)
-
-            df = yf.download(
-                symbol,
-                start=start_date.strftime('%Y-%m-%d'),
-                end=end_date.strftime('%Y-%m-%d'),
-                interval='1d',
-                progress=False,
-                auto_adjust=False
-            )
-
-            if df.empty:
-                return {
-                    "success": False,
-                    "symbol": symbol,
-                    "message": "DataFrame is empty"
-                }
-
-            return {
-                "success": True,
-                "symbol": symbol,
-                "records_count": len(df),
-                "first_date": df.index[0].strftime('%Y-%m-%d'),
-                "last_date": df.index[-1].strftime('%Y-%m-%d'),
-                "latest_close": float(df.iloc[-1]['Close']),
-                "sample_data": {
-                    "open": float(df.iloc[-1]['Open']),
-                    "high": float(df.iloc[-1]['High']),
-                    "low": float(df.iloc[-1]['Low']),
-                    "close": float(df.iloc[-1]['Close']),
-                    "volume": int(df.iloc[-1]['Volume'])
-                }
-            }
-
-        result = await loop.run_in_executor(None, download)
-        return result
-
-    try:
-        result = await test_download()
-        return {
-            "status": "test_complete",
-            "method": "yf.download()",
-            **result
-        }
-    except Exception as e:
-        logger.error(f"Test failed: {e}")
-        return {
-            "status": "test_failed",
-            "method": "yf.download()",
-            "error": str(e)
-        }
-
-
 @router.get("/debug/yahoo")
 async def debug_yahoo_finance() -> Dict[str, Any]:
     """
-    Debug endpoint to test Yahoo Finance with different symbols
+    Debug endpoint to test Yahoo Finance direct HTTP API with different symbols
 
-    This will test multiple symbols to find which one works for Ibovespa
+    Tests multiple symbols to verify connectivity and data availability
     """
-    import asyncio
-
-    async def test_symbol(symbol: str):
-        """Test a specific symbol with yfinance"""
-        try:
-            loop = asyncio.get_event_loop()
-
-            def download():
-                import yfinance as yf
-
-                logger.info(f"Testing symbol: {symbol}")
-                ticker = yf.Ticker(symbol)
-
-                # Try to get last 30 days
-                end_date = datetime.now()
-                start_date = end_date - timedelta(days=30)
-
-                df = ticker.history(
-                    start=start_date.strftime('%Y-%m-%d'),
-                    end=end_date.strftime('%Y-%m-%d'),
-                    interval='1d'
-                )
-
-                if df.empty:
-                    return None
-
-                # Also get some info
-                info = {}
-                try:
-                    ticker_info = ticker.info
-                    info['name'] = ticker_info.get('longName') or ticker_info.get('shortName', 'Unknown')
-                    info['symbol'] = ticker_info.get('symbol', symbol)
-                except:
-                    info['name'] = 'Info not available'
-                    info['symbol'] = symbol
-
-                return {
-                    'records_count': len(df),
-                    'first_date': df.index[0].strftime('%Y-%m-%d'),
-                    'last_date': df.index[-1].strftime('%Y-%m-%d'),
-                    'latest_close': float(df.iloc[-1]['Close']),
-                    'info': info
-                }
-
-            result = await loop.run_in_executor(None, download)
-
-            if result:
-                return {
-                    "symbol": symbol,
-                    "success": True,
-                    **result
-                }
-            else:
-                return {
-                    "symbol": symbol,
-                    "success": False,
-                    "error": "No data returned"
-                }
-
-        except Exception as e:
-            return {
-                "symbol": symbol,
-                "success": False,
-                "error": str(e)
-            }
-
-    # Test different symbol variations for Ibovespa
     symbols_to_test = [
-        "^BVSP",      # Current symbol we're using
-        "BVSP",       # Without caret
-        "^IBOV",      # Alternative with IBOV
-        "IBOV",       # IBOV without caret
-        "PETR4.SA",   # Test with a known stock (Petrobras)
-        "VALE3.SA",   # Test with another stock (Vale)
+        "^BVSP",      # Ibovespa index
+        "PETR4.SA",   # Petrobras
+        "VALE3.SA",   # Vale
+        "ITUB4.SA",   # Itaú Unibanco
     ]
 
     results = []
     for symbol in symbols_to_test:
-        result = await test_symbol(symbol)
-        results.append(result)
-        logger.info(f"Symbol {symbol}: {'✅ SUCCESS' if result['success'] else '❌ FAILED'}")
+        try:
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=30)
+
+            records = await yahoo_finance_service._fetch_chart_data(
+                symbol=symbol,
+                start_date=start_date,
+                end_date=end_date,
+                interval="1d"
+            )
+
+            if records:
+                latest = records[-1]
+                results.append({
+                    "symbol": symbol,
+                    "success": True,
+                    "records_count": len(records),
+                    "first_date": str(records[0]['date']),
+                    "last_date": str(latest['date']),
+                    "latest_close": latest['close']
+                })
+            else:
+                results.append({
+                    "symbol": symbol,
+                    "success": False,
+                    "error": "No records returned"
+                })
+
+        except Exception as e:
+            results.append({
+                "symbol": symbol,
+                "success": False,
+                "error": str(e)
+            })
+
+        logger.info(f"Symbol {symbol}: {'SUCCESS' if results[-1]['success'] else 'FAILED'}")
 
     successful = [r for r in results if r['success']]
 
     return {
         "status": "debug_complete",
+        "method": "direct_http_api",
         "total_tested": len(symbols_to_test),
         "successful_count": len(successful),
         "tests": results,
-        "recommendation": f"Use symbol: {successful[0]['symbol']}" if successful else "None of the tested symbols returned data. Yahoo Finance might not support Brazilian market or there's a network issue."
+        "recommendation": f"Use symbol: {successful[0]['symbol']}" if successful else "No symbols returned data - check network connectivity to query1.finance.yahoo.com"
     }
 
 

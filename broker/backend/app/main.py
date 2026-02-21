@@ -1,12 +1,3 @@
-# CRITICAL: Disable proxy BEFORE any imports that use requests/urllib
-# This fixes Yahoo Finance 403 Forbidden errors in environments with restrictive proxies
-import os
-os.environ['NO_PROXY'] = '*'
-os.environ['no_proxy'] = '*'
-# Remove proxy environment variables
-for proxy_var in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
-    os.environ.pop(proxy_var, None)
-
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware

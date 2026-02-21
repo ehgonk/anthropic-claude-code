@@ -1,41 +1,43 @@
 """
 Yahoo Finance Data Service - FONTE ÚNICA DE DADOS
 
-Busca dados do mercado brasileiro usando Yahoo Finance.
+Busca dados do mercado brasileiro usando Yahoo Finance API diretamente.
 Esta é a ÚNICA fonte de dados da aplicação.
+
+Usa httpx para fazer requests HTTP diretamente à API do Yahoo Finance,
+sem depender da biblioteca yfinance (que tem problemas com proxy/bloqueio).
 
 Critérios:
 - Data mínima: 1994-07-01 (início do Real - R$)
 - Ibovespa: símbolo ^BVSP
 - Ações brasileiras: sufixo .SA (ex: PETR4.SA)
 
-Features:
-- Download de dados históricos
-- Cotações atuais
-- Suporte para múltiplas ações
-- Biblioteca yfinance estável e confiável
+Yahoo Finance Chart API:
+- URL: https://query1.finance.yahoo.com/v8/finance/chart/{symbol}
+- Params: period1, period2 (unix timestamps), interval (1d, 1wk, 1mo)
 """
 
-import asyncio
 import logging
-import os
+import httpx
 from datetime import datetime, timedelta, date
 from typing import List, Dict, Optional
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
-# Disable proxy for Yahoo Finance to avoid 403 Forbidden errors
-# Some environments have proxies that block Yahoo Finance
-os.environ['NO_PROXY'] = '*'
-os.environ['no_proxy'] = '*'
+# Yahoo Finance API base URL
+YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart"
 
-# Alternative: unset proxy environment variables
-for proxy_var in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
-    os.environ.pop(proxy_var, None)
+# Headers to simulate browser request
+YAHOO_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+}
 
 
 class YahooFinanceService:
-    """Service to fetch stock data from Yahoo Finance"""
+    """Service to fetch stock data from Yahoo Finance via direct HTTP"""
 
     # Data mínima: 1994-07-01 (início do Real)
     MIN_DATE = date(1994, 7, 1)
@@ -55,22 +57,119 @@ class YahooFinanceService:
 
     def __init__(self):
         self.timeout = 30.0
-        # Configure requests session without proxy
-        self._setup_no_proxy()
 
-    def _setup_no_proxy(self):
-        """Configure environment to bypass proxy for Yahoo Finance"""
-        import yfinance as yf
-        import requests
+    def _to_unix(self, dt: datetime) -> int:
+        """Convert datetime to Unix timestamp"""
+        return int(dt.timestamp())
 
-        # Create session without proxy
-        session = requests.Session()
-        session.proxies = {}  # Empty proxies dict = no proxy
-        session.trust_env = False  # Don't use environment proxy settings
+    def _get_client(self) -> httpx.AsyncClient:
+        """Create httpx client without proxy"""
+        return httpx.AsyncClient(
+            headers=YAHOO_HEADERS,
+            timeout=self.timeout,
+            follow_redirects=True,
+            proxy=None,
+            trust_env=False,  # Ignore environment proxy settings
+        )
 
-        # Configure yfinance to use this session
-        # Note: yfinance uses the requests library internally
-        # We need to patch the session for each request
+    async def _fetch_chart_data(
+        self,
+        symbol: str,
+        start_date: datetime,
+        end_date: datetime,
+        interval: str = "1d"
+    ) -> List[Dict]:
+        """
+        Fetch chart data from Yahoo Finance API
+
+        Args:
+            symbol: Yahoo Finance symbol (e.g., ^BVSP, VALE3.SA)
+            start_date: Start datetime
+            end_date: End datetime
+            interval: Data interval (1d, 1wk, 1mo)
+
+        Returns:
+            List of OHLCV records
+        """
+        # URL-encode symbol (important for ^BVSP)
+        encoded_symbol = quote(symbol, safe='')
+        url = f"{YAHOO_CHART_URL}/{encoded_symbol}"
+
+        params = {
+            "period1": self._to_unix(start_date),
+            "period2": self._to_unix(end_date),
+            "interval": interval,
+            "includeAdjustedClose": "true",
+            "events": "history",
+        }
+
+        logger.info(f"📥 Fetching {symbol} from Yahoo Finance API...")
+        logger.info(f"   URL: {url}")
+        logger.info(f"   Period: {start_date.date()} to {end_date.date()}")
+
+        async with self._get_client() as client:
+            response = await client.get(url, params=params)
+
+            if response.status_code != 200:
+                error_msg = f"Yahoo Finance API returned HTTP {response.status_code}"
+                logger.error(f"❌ {error_msg}")
+                logger.error(f"   Response: {response.text[:500]}")
+                raise Exception(error_msg)
+
+            data = response.json()
+
+        # Parse the chart response
+        chart = data.get("chart", {})
+        result = chart.get("result")
+
+        if not result or len(result) == 0:
+            error = chart.get("error", {})
+            error_msg = error.get("description", "No data returned")
+            raise Exception(f"Yahoo Finance error: {error_msg}")
+
+        result = result[0]
+        timestamps = result.get("timestamp", [])
+        indicators = result.get("indicators", {})
+        quotes = indicators.get("quote", [{}])[0]
+
+        if not timestamps:
+            raise Exception("No timestamps in Yahoo Finance response")
+
+        opens = quotes.get("open", [])
+        highs = quotes.get("high", [])
+        lows = quotes.get("low", [])
+        closes = quotes.get("close", [])
+        volumes = quotes.get("volume", [])
+
+        records = []
+        for i, ts in enumerate(timestamps):
+            try:
+                record_date = datetime.utcfromtimestamp(ts).date()
+
+                # Filter by MIN_DATE (1994+)
+                if record_date < self.MIN_DATE:
+                    continue
+
+                # Skip if any value is None
+                if any(v is None for v in [opens[i], highs[i], lows[i], closes[i]]):
+                    continue
+
+                record = {
+                    'date': record_date,
+                    'open': float(opens[i]),
+                    'high': float(highs[i]),
+                    'low': float(lows[i]),
+                    'close': float(closes[i]),
+                    'volume': int(volumes[i]) if volumes[i] is not None else 0
+                }
+                records.append(record)
+
+            except (ValueError, IndexError, TypeError) as e:
+                logger.warning(f"Skipping invalid record at index {i}: {e}")
+                continue
+
+        logger.info(f"✅ Parsed {len(records)} records for {symbol}")
+        return records
 
     async def fetch_ibovespa_historical(
         self,
@@ -85,19 +184,8 @@ class YahooFinanceService:
             end_date: Data final (padrão: hoje)
 
         Returns:
-            Lista de registros diários:
-            [
-                {
-                    'date': date(2024, 1, 1),
-                    'open': 120000.0,
-                    'high': 121000.0,
-                    'low': 119000.0,
-                    'close': 120500.0,
-                    'volume': 15000000000
-                }
-            ]
+            Lista de registros diários com date, open, high, low, close, volume
         """
-        # Datas padrão
         if end_date is None:
             end_date = datetime.now()
         if start_date is None:
@@ -109,70 +197,17 @@ class YahooFinanceService:
 
         logger.info(f"📊 Buscando Ibovespa do Yahoo Finance ({start_date.date()} a {end_date.date()})")
 
-        # Run download in thread pool (yfinance is not async)
-        loop = asyncio.get_event_loop()
+        records = await self._fetch_chart_data(
+            symbol=self.IBOVESPA_SYMBOL,
+            start_date=start_date,
+            end_date=end_date,
+            interval="1d"
+        )
 
-        def download_ibov():
-            try:
-                import yfinance as yf
-                import requests
-            except ImportError:
-                raise Exception("yfinance library not installed")
+        # Sort by date (oldest first)
+        records.sort(key=lambda x: x['date'])
 
-            # Bypass proxy - critical for environments with restrictive proxies
-            session = requests.Session()
-            session.proxies = {}
-            session.trust_env = False
-
-            logger.info(f"📥 Downloading {self.IBOVESPA_SYMBOL}...")
-
-            # Use yf.download() instead of Ticker().history() - more reliable for Brazilian stocks
-            df = yf.download(
-                self.IBOVESPA_SYMBOL,
-                start=start_date.strftime('%Y-%m-%d'),
-                end=end_date.strftime('%Y-%m-%d'),
-                interval='1d',
-                progress=False,
-                auto_adjust=False,
-                threads=False
-            )
-
-            if df.empty:
-                raise Exception("No data returned from Yahoo Finance")
-
-            logger.info(f"✅ Downloaded {len(df)} records")
-
-            # Convert DataFrame to records
-            records = []
-            for date_idx, row in df.iterrows():
-                try:
-                    record_date = date_idx.date()
-
-                    # Filtrar por MIN_DATE (1994+)
-                    if record_date < self.MIN_DATE:
-                        continue
-
-                    record = {
-                        'date': record_date,
-                        'open': float(row['Open']),
-                        'high': float(row['High']),
-                        'low': float(row['Low']),
-                        'close': float(row['Close']),
-                        'volume': int(row['Volume'])
-                    }
-                    records.append(record)
-
-                except (ValueError, KeyError) as e:
-                    logger.warning(f"Skipping invalid row: {e}")
-                    continue
-
-            # Sort by date (oldest first)
-            records.sort(key=lambda x: x['date'])
-
-            logger.info(f"✅ {len(records)} registros do Ibovespa processados")
-            return records
-
-        records = await loop.run_in_executor(None, download_ibov)
+        logger.info(f"✅ {len(records)} registros do Ibovespa processados")
         return records
 
     def _add_suffix(self, symbol: str) -> str:
@@ -202,19 +237,8 @@ class YahooFinanceService:
             end_date: End date (default: today)
 
         Returns:
-            Dictionary with symbol as key and stock data as value:
-            {
-                'symbol': 'PETR4',
-                'name': 'Petrobras PN',
-                'price': 38.50,
-                'change_percent': 2.5,
-                'volume': 123456789,
-                'prices': [
-                    {'date': '2024-01-01', 'open': 38.00, 'high': 39.00, 'low': 37.50, 'close': 38.50, 'volume': 123456}
-                ]
-            }
+            Dictionary with symbol as key and stock data as value
         """
-        # Default date range
         if end_date is None:
             end_date = datetime.now()
         if start_date is None:
@@ -222,107 +246,61 @@ class YahooFinanceService:
 
         logger.info(f"📊 Fetching data for {len(symbols)} stocks from Yahoo Finance...")
 
-        # Run download in thread pool (yfinance is not async)
-        loop = asyncio.get_event_loop()
+        results = {}
 
-        def download_all():
+        for symbol in symbols:
             try:
-                import yfinance as yf
-            except ImportError:
-                raise Exception("yfinance library not installed")
+                yahoo_symbol = self._add_suffix(symbol)
 
-            results = {}
+                prices_raw = await self._fetch_chart_data(
+                    symbol=yahoo_symbol,
+                    start_date=start_date,
+                    end_date=end_date,
+                    interval="1d"
+                )
 
-            # Add .SA suffix to all symbols
-            yahoo_symbols = [self._add_suffix(s) for s in symbols]
-
-            # Download all at once - more efficient
-            logger.info(f"Downloading {len(yahoo_symbols)} symbols...")
-            df_all = yf.download(
-                yahoo_symbols,
-                start=start_date.strftime('%Y-%m-%d'),
-                end=end_date.strftime('%Y-%m-%d'),
-                interval='1d',
-                progress=False,
-                auto_adjust=False,
-                group_by='ticker',
-                threads=True
-            )
-
-            # Process each symbol
-            for i, symbol in enumerate(symbols):
-                try:
-                    yahoo_symbol = yahoo_symbols[i]
-
-                    # Extract data for this symbol
-                    if len(yahoo_symbols) == 1:
-                        df = df_all
-                    else:
-                        df = df_all[yahoo_symbol]
-
-                    if df.empty:
-                        logger.warning(f"No data for {symbol}")
-                        continue
-
-                    # Convert DataFrame to price records
-                    prices = []
-                    for date_idx, row in df.iterrows():
-                        try:
-                            prices.append({
-                                'date': date_idx.strftime('%Y-%m-%d'),
-                                'open': float(row['Open']),
-                                'high': float(row['High']),
-                                'low': float(row['Low']),
-                                'close': float(row['Close']),
-                                'volume': int(row['Volume'])
-                            })
-                        except (ValueError, KeyError) as e:
-                            logger.warning(f"Skipping invalid row for {symbol}: {e}")
-                            continue
-
-                    if not prices:
-                        logger.warning(f"No valid price data for {symbol}")
-                        continue
-
-                    # Sort by date
-                    prices.sort(key=lambda x: x['date'])
-
-                    # Get latest price and calculate change
-                    latest = prices[-1]
-                    if len(prices) >= 2:
-                        prev_close = prices[-2]['close']
-                        change_pct = ((latest['close'] - prev_close) / prev_close) * 100
-                    else:
-                        change_pct = 0.0
-
-                    # Get stock info for name
-                    try:
-                        ticker = yf.Ticker(yahoo_symbol)
-                        info = ticker.info
-                        name = info.get('longName') or info.get('shortName') or symbol
-                    except:
-                        name = symbol
-
-                    results[symbol] = {
-                        'symbol': symbol,
-                        'name': name,
-                        'price': latest['close'],
-                        'change_percent': change_pct,
-                        'volume': latest['volume'],
-                        'prices': prices
-                    }
-
-                    logger.info(f"✅ {symbol}: {len(prices)} records")
-
-                except Exception as e:
-                    logger.error(f"❌ Failed to process {symbol}: {e}")
+                if not prices_raw:
+                    logger.warning(f"No data for {symbol}")
                     continue
 
-            return results
+                # Convert to price records with string dates
+                prices = []
+                for r in prices_raw:
+                    prices.append({
+                        'date': r['date'].strftime('%Y-%m-%d'),
+                        'open': r['open'],
+                        'high': r['high'],
+                        'low': r['low'],
+                        'close': r['close'],
+                        'volume': r['volume']
+                    })
 
-        results = await loop.run_in_executor(None, download_all)
+                prices.sort(key=lambda x: x['date'])
+
+                # Get latest price and calculate change
+                latest = prices[-1]
+                if len(prices) >= 2:
+                    prev_close = prices[-2]['close']
+                    change_pct = ((latest['close'] - prev_close) / prev_close) * 100
+                else:
+                    change_pct = 0.0
+
+                results[symbol] = {
+                    'symbol': symbol,
+                    'name': symbol,  # Name will be set later if needed
+                    'price': latest['close'],
+                    'change_percent': change_pct,
+                    'volume': latest['volume'],
+                    'prices': prices
+                }
+
+                logger.info(f"✅ {symbol}: {len(prices)} records")
+
+            except Exception as e:
+                logger.error(f"❌ Failed to fetch {symbol}: {e}")
+                continue
+
         logger.info(f"✅ Fetched {len(results)}/{len(symbols)} stocks successfully")
-
         return results
 
     async def fetch_single_stock(
@@ -373,7 +351,6 @@ class YahooFinanceService:
         Returns:
             List of matching stocks
         """
-        # Simple implementation: check if query matches any popular stock
         query_upper = query.upper()
 
         matching = []
@@ -388,39 +365,29 @@ class YahooFinanceService:
     async def test_connection(self) -> Dict:
         """Test connection to Yahoo Finance"""
         try:
-            import yfinance as yf
-            from datetime import timedelta
-
-            # Test with a known Brazilian stock - VALE3.SA
+            # Test with VALE3.SA - recent data (last 30 days)
             test_symbol = "VALE3.SA"
             logger.info(f"Testing Yahoo Finance connection with {test_symbol}...")
 
-            # Try to download recent data (last 30 days)
             end_date = datetime.now()
             start_date = end_date - timedelta(days=30)
 
-            # Use yf.download() - more reliable
-            df = yf.download(
-                test_symbol,
-                start=start_date.strftime('%Y-%m-%d'),
-                end=end_date.strftime('%Y-%m-%d'),
-                interval='1d',
-                progress=False,
-                auto_adjust=False
+            records = await self._fetch_chart_data(
+                symbol=test_symbol,
+                start_date=start_date,
+                end_date=end_date,
+                interval="1d"
             )
 
-            if not df.empty:
-                record_count = len(df)
-                latest_date = df.index[-1].strftime('%Y-%m-%d')
-                latest_close = float(df.iloc[-1]['Close'])
-
+            if records:
+                latest = records[-1]
                 return {
                     'status': 'ok',
-                    'message': f'Successfully connected to Yahoo Finance',
+                    'message': 'Successfully connected to Yahoo Finance',
                     'test_symbol': test_symbol,
-                    'records_fetched': record_count,
-                    'latest_date': latest_date,
-                    'latest_close': latest_close
+                    'records_fetched': len(records),
+                    'latest_date': str(latest['date']),
+                    'latest_close': latest['close']
                 }
             else:
                 return {

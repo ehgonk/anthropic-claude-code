@@ -7,4 +7,3 @@ pydantic==2.10.6
 pydantic-settings==2.7.1
 python-dateutil==2.9.0
 python-multipart==0.0.18
-yfinance==0.2.49
