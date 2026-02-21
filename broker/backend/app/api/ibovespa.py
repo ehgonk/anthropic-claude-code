@@ -3,8 +3,8 @@ Ibovespa Data Management API
 
 Endpoints for managing Ibovespa historical data:
 - Manual upload (CSV file)
-- Automatic download from Investing.com
-- Automatic download from B3 (legacy)
+- Automatic download from Yahoo Finance (FONTE ÚNICA)
+- Automatic download from B3 (legacy/deprecated)
 - Data information and statistics
 """
 
@@ -17,7 +17,7 @@ import logging
 import httpx
 
 from ..services.ibovespa_service import ibovespa_service
-from ..services.investing_service import investing_service
+from ..services.yahoo_finance_service import yahoo_finance_service
 
 router = APIRouter(prefix="/ibovespa", tags=["ibovespa"])
 logger = logging.getLogger(__name__)
@@ -143,29 +143,30 @@ async def get_ibovespa_info() -> Dict[str, Any]:
         }
 
 
-@router.post("/download/investing")
-async def download_from_investing(
+@router.post("/download/yahoo")
+async def download_from_yahoo(
     days: int = 365,
     force_full: bool = False
 ) -> Dict[str, Any]:
     """
-    Download Ibovespa data from Investing.com (RECOMMENDED)
+    Download Ibovespa data from Yahoo Finance (RECOMMENDED - FONTE ÚNICA)
 
-    This is the new primary method for fetching historical Ibovespa data.
-    Investing.com provides reliable access without captcha blocks.
+    Este é o método principal para buscar dados históricos do Ibovespa.
+    Yahoo Finance: confiável, estável, sem bloqueios.
 
     Args:
-        days: Number of days of historical data to fetch (default: 365)
-        force_full: If True, fetch full history; if False, fetch incrementally
+        days: Número de dias de histórico (padrão: 365)
+        force_full: Se True, busca histórico completo desde 1994
 
     Returns:
         Success: Records processed and inserted
         Failure: Error message with alternatives
 
-    Example:
-        POST /api/ibovespa/download/investing?days=730  # Last 2 years
+    Examples:
+        POST /api/ibovespa/download/yahoo?days=730  # Últimos 2 anos
+        POST /api/ibovespa/download/yahoo?force_full=true  # Desde 1994
     """
-    logger.info(f"🔄 Downloading Ibovespa data from Investing.com ({days} days)...")
+    logger.info(f"🔄 Downloading Ibovespa data from Yahoo Finance ({days} days)...")
 
     try:
         # Calculate date range
@@ -179,8 +180,8 @@ async def download_from_investing(
             start_date = end_date - timedelta(days=days)
             logger.info(f"📥 Downloading last {days} days...")
 
-        # Fetch data from Investing.com
-        records = await investing_service.fetch_ibovespa_historical(
+        # Fetch data from Yahoo Finance
+        records = await yahoo_finance_service.fetch_ibovespa_historical(
             start_date=start_date,
             end_date=end_date
         )
@@ -188,17 +189,17 @@ async def download_from_investing(
         if not records:
             raise HTTPException(
                 status_code=404,
-                detail="No data returned from Investing.com"
+                detail="No data returned from Yahoo Finance"
             )
 
-        logger.info(f"✅ Fetched {len(records)} records from Investing.com")
+        logger.info(f"✅ Fetched {len(records)} records from Yahoo Finance")
 
         # Update database
         inserted = await ibovespa_service.update_database(records)
 
         return {
             "status": "success",
-            "source": "investing.com",
+            "source": "yahoo_finance",
             "records_fetched": len(records),
             "records_inserted": inserted,
             "records_skipped": len(records) - inserted,
@@ -210,40 +211,36 @@ async def download_from_investing(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Error downloading from Investing.com: {e}")
+        logger.error(f"❌ Error downloading from Yahoo Finance: {e}")
         raise HTTPException(
             status_code=500,
             detail={
-                "error": "investing_download_failed",
-                "message": f"Failed to download from Investing.com: {str(e)}",
+                "error": "yahoo_finance_download_failed",
+                "message": f"Failed to download from Yahoo Finance: {str(e)}",
                 "alternatives": [
                     {
                         "method": "manual_upload",
                         "endpoint": "POST /api/ibovespa/upload/csv",
                         "description": "Upload CSV file manually"
-                    },
-                    {
-                        "method": "b3_download",
-                        "endpoint": "POST /api/ibovespa/download/auto",
-                        "description": "Try downloading from B3 (may have captcha)"
                     }
                 ]
             }
         )
 
 
-@router.get("/test/investing")
-async def test_investing_connection() -> Dict[str, Any]:
+@router.get("/test/yahoo")
+async def test_yahoo_connection() -> Dict[str, Any]:
     """
-    Test connection to data sources (Yahoo Finance, Investing.com)
+    Test connection to Yahoo Finance
 
     Returns:
-        Connection status for each data source
+        Connection status
     """
-    results = await investing_service.test_connection()
+    result = await yahoo_finance_service.test_connection()
     return {
         "status": "tested",
-        "sources": results
+        "source": "yahoo_finance",
+        **result
     }
 
 
@@ -551,26 +548,26 @@ async def get_download_instructions() -> Dict[str, Any]:
         "title": "Como baixar dados do Ibovespa",
         "methods": [
             {
-                "method": "investing_auto",
-                "endpoint": "POST /api/ibovespa/download/investing",
-                "description": "Download automático do Investing.com (RECOMENDADO)",
+                "method": "yahoo_finance",
+                "endpoint": "POST /api/ibovespa/download/yahoo",
+                "description": "Download do Yahoo Finance (RECOMENDADO - FONTE ÚNICA)",
                 "success_rate": "alta",
                 "recommended": True,
-                "notes": "Fonte confiável sem captcha"
-            },
-            {
-                "method": "b3_auto",
-                "endpoint": "POST /api/ibovespa/download/auto",
-                "description": "Download automático da B3 (LEGADO)",
-                "success_rate": "baixa",
-                "notes": "B3 pode bloquear com captcha"
+                "notes": "Fonte oficial, estável, biblioteca yfinance"
             },
             {
                 "method": "manual",
                 "endpoint": "POST /api/ibovespa/upload/csv",
                 "description": "Upload manual de arquivo CSV",
                 "success_rate": "alta",
-                "notes": "Alternativa para casos onde o automático falha"
+                "notes": "Alternativa manual"
+            },
+            {
+                "method": "b3_auto",
+                "endpoint": "POST /api/ibovespa/download/auto",
+                "description": "Download da B3 (DEPRECATED)",
+                "success_rate": "baixa",
+                "notes": "Legado - B3 bloqueia com captcha"
             }
         ],
         "manual_steps": [

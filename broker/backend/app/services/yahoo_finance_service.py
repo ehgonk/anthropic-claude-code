@@ -1,19 +1,24 @@
 """
-Yahoo Finance Data Service
+Yahoo Finance Data Service - FONTE ÚNICA DE DADOS
 
-Fetches stock data for Brazilian stocks from Yahoo Finance using yfinance library.
-This replaces the B3 COTAHIST service with a more reliable and simpler approach.
+Busca dados do mercado brasileiro usando Yahoo Finance.
+Esta é a ÚNICA fonte de dados da aplicação.
+
+Critérios:
+- Data mínima: 1994-07-01 (início do Real - R$)
+- Ibovespa: símbolo ^BVSP
+- Ações brasileiras: sufixo .SA (ex: PETR4.SA)
 
 Features:
-- Download historical data for any stock
-- Fetch current quotes
-- Support for batch downloads
-- Automatic fallback to Investing.com if Yahoo Finance fails
+- Download de dados históricos
+- Cotações atuais
+- Suporte para múltiplas ações
+- Biblioteca yfinance estável e confiável
 """
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -21,6 +26,12 @@ logger = logging.getLogger(__name__)
 
 class YahooFinanceService:
     """Service to fetch stock data from Yahoo Finance"""
+
+    # Data mínima: 1994-07-01 (início do Real)
+    MIN_DATE = date(1994, 7, 1)
+
+    # Ibovespa symbol on Yahoo Finance
+    IBOVESPA_SYMBOL = "^BVSP"
 
     # Brazilian stock symbols on Yahoo Finance use .SA suffix
     SUFFIX = ".SA"
@@ -34,6 +45,101 @@ class YahooFinanceService:
 
     def __init__(self):
         self.timeout = 30.0
+
+    async def fetch_ibovespa_historical(
+        self,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> List[Dict]:
+        """
+        Busca dados históricos do Ibovespa do Yahoo Finance
+
+        Args:
+            start_date: Data inicial (padrão: 1994-07-01)
+            end_date: Data final (padrão: hoje)
+
+        Returns:
+            Lista de registros diários:
+            [
+                {
+                    'date': date(2024, 1, 1),
+                    'open': 120000.0,
+                    'high': 121000.0,
+                    'low': 119000.0,
+                    'close': 120500.0,
+                    'volume': 15000000000
+                }
+            ]
+        """
+        # Datas padrão
+        if end_date is None:
+            end_date = datetime.now()
+        if start_date is None:
+            start_date = datetime(1994, 7, 1)
+
+        # Garantir que não seja antes de 1994
+        if start_date.date() < self.MIN_DATE:
+            start_date = datetime.combine(self.MIN_DATE, datetime.min.time())
+
+        logger.info(f"📊 Buscando Ibovespa do Yahoo Finance ({start_date.date()} a {end_date.date()})")
+
+        # Run download in thread pool (yfinance is not async)
+        loop = asyncio.get_event_loop()
+
+        def download_ibov():
+            try:
+                import yfinance as yf
+            except ImportError:
+                raise Exception("yfinance library not installed")
+
+            logger.info(f"📥 Downloading {self.IBOVESPA_SYMBOL}...")
+
+            ticker = yf.Ticker(self.IBOVESPA_SYMBOL)
+
+            # Get historical data
+            df = ticker.history(
+                start=start_date.strftime('%Y-%m-%d'),
+                end=end_date.strftime('%Y-%m-%d'),
+                interval='1d'
+            )
+
+            if df.empty:
+                raise Exception("No data returned from Yahoo Finance")
+
+            logger.info(f"✅ Downloaded {len(df)} records")
+
+            # Convert DataFrame to records
+            records = []
+            for date_idx, row in df.iterrows():
+                try:
+                    record_date = date_idx.date()
+
+                    # Filtrar por MIN_DATE (1994+)
+                    if record_date < self.MIN_DATE:
+                        continue
+
+                    record = {
+                        'date': record_date,
+                        'open': float(row['Open']),
+                        'high': float(row['High']),
+                        'low': float(row['Low']),
+                        'close': float(row['Close']),
+                        'volume': int(row['Volume'])
+                    }
+                    records.append(record)
+
+                except (ValueError, KeyError) as e:
+                    logger.warning(f"Skipping invalid row: {e}")
+                    continue
+
+            # Sort by date (oldest first)
+            records.sort(key=lambda x: x['date'])
+
+            logger.info(f"✅ {len(records)} registros do Ibovespa processados")
+            return records
+
+        records = await loop.run_in_executor(None, download_ibov)
+        return records
 
     def _add_suffix(self, symbol: str) -> str:
         """Add .SA suffix to Brazilian stock symbols if not present"""

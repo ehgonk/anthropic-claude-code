@@ -56,25 +56,25 @@ async def clear_database() -> Dict[str, Any]:
         }
 
 
-@router.post("/database/reset-to-investing")
-async def reset_to_investing_source() -> Dict[str, Any]:
+@router.post("/database/reset-to-yahoo")
+async def reset_to_yahoo_source() -> Dict[str, Any]:
     """
-    Reset database and prepare for Investing.com/Yahoo Finance data
+    Reset database and prepare for Yahoo Finance data (FONTE ÚNICA)
 
     This endpoint:
-    1. Clears all existing data (from B3)
-    2. Prepares database for new data source
+    1. Clears all existing data (from B3/other sources)
+    2. Prepares database for Yahoo Finance data
     3. Creates IBOV index entry
 
     Returns:
         Status and next steps
     """
-    logger.info("🔄 Resetting database to use Investing.com/Yahoo Finance...")
+    logger.info("🔄 Resetting database to use Yahoo Finance...")
 
     # Clear database
     clear_result = await clear_database()
 
-    logger.info("✅ Database reset complete - ready for new data source")
+    logger.info("✅ Database reset complete - ready for Yahoo Finance")
 
     return {
         "status": "success",
@@ -84,19 +84,20 @@ async def reset_to_investing_source() -> Dict[str, Any]:
             {
                 "step": 1,
                 "action": "Download Ibovespa data",
-                "endpoint": "POST /api/ibovespa/download/investing",
+                "endpoint": "POST /api/ibovespa/download/yahoo",
                 "description": "Fetch Ibovespa historical data from Yahoo Finance"
             },
             {
                 "step": 2,
                 "action": "Download stock data",
                 "endpoint": "POST /api/stocks/download",
-                "description": "Fetch individual stock data from Yahoo Finance/Investing.com"
+                "description": "Fetch individual stock data from Yahoo Finance"
             }
         ],
         "notes": [
             "All data from B3 has been removed",
-            "New data source: Yahoo Finance (primary), Investing.com (fallback)",
+            "New data source: Yahoo Finance (ÚNICA FONTE)",
+            "Critério: dados >= 1994-07-01 (Real R$)",
             "Run the endpoints above to populate database with new data"
         ]
     }
