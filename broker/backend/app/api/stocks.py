@@ -5,7 +5,9 @@ Stock API endpoints
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from typing import Optional
+from typing import Optional, Dict, Any
+from datetime import datetime
+import logging
 
 from ..database import get_db
 from ..models import Stock, StockPrice
@@ -15,8 +17,10 @@ from ..schemas import (
     PriceHistoryResponse,
     StockPriceResponse
 )
+from ..services.yahoo_finance_service import yahoo_finance_service
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("", response_model=StockListResponse)
@@ -167,3 +171,99 @@ async def get_latest_price(
         raise HTTPException(status_code=404, detail=f"No price data found for {symbol}")
 
     return StockPriceResponse.model_validate(price)
+
+
+@router.post("/download/yahoo")
+async def download_stocks_from_yahoo(
+    days: int = Query(365, description="Days of historical data"),
+    db: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Download popular Brazilian stocks from Yahoo Finance
+
+    Downloads data for popular stocks (PETR4, VALE3, ITUB4, etc.)
+    and saves to database with price history.
+
+    Args:
+        days: Number of days of historical data (default: 365)
+    """
+    logger.info(f"📥 Downloading stocks from Yahoo Finance ({days} days)...")
+
+    try:
+        # Fetch stock data from Yahoo Finance
+        stock_data = await yahoo_finance_service.get_popular_stocks(days=days)
+
+        if not stock_data:
+            raise HTTPException(status_code=404, detail="No stock data returned from Yahoo Finance")
+
+        total_prices = 0
+        stocks_updated = 0
+
+        for symbol, data in stock_data.items():
+            try:
+                # Check if stock exists
+                result = await db.execute(select(Stock).where(Stock.symbol == symbol))
+                stock = result.scalar_one_or_none()
+
+                if not stock:
+                    stock = Stock(
+                        symbol=symbol,
+                        name=data['name'],
+                        price=data['price'],
+                        change_percent=data['change_percent'],
+                        volume=data['volume'],
+                        updated_at=datetime.utcnow()
+                    )
+                    db.add(stock)
+                    await db.flush()
+                else:
+                    stock.name = data['name']
+                    stock.price = data['price']
+                    stock.change_percent = data['change_percent']
+                    stock.volume = data['volume']
+                    stock.updated_at = datetime.utcnow()
+
+                # Add price records (skip duplicates)
+                for price in data['prices']:
+                    existing = await db.execute(
+                        select(StockPrice).where(
+                            StockPrice.stock_id == stock.id,
+                            StockPrice.date == price['date']
+                        )
+                    )
+                    if existing.scalar_one_or_none():
+                        continue
+
+                    db.add(StockPrice(
+                        stock_id=stock.id,
+                        date=price['date'],
+                        open=price['open'],
+                        high=price['high'],
+                        low=price['low'],
+                        close=price['close'],
+                        volume=price['volume'],
+                    ))
+                    total_prices += 1
+
+                stocks_updated += 1
+                logger.info(f"✅ {symbol}: saved")
+
+            except Exception as e:
+                logger.error(f"❌ Failed to save {symbol}: {e}")
+                continue
+
+        await db.commit()
+
+        return {
+            "status": "success",
+            "source": "yahoo_finance",
+            "stocks_downloaded": stocks_updated,
+            "price_records_inserted": total_prices,
+            "symbols": list(stock_data.keys())
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error downloading stocks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
