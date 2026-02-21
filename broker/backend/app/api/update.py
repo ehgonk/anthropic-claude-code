@@ -9,7 +9,6 @@ from typing import Optional
 from datetime import datetime
 
 from ..services.auto_update import auto_update_service
-from ..scheduler import scheduler
 
 router = APIRouter(prefix="/update", tags=["update"])
 
@@ -117,20 +116,3 @@ async def get_last_update_date():
                 "last_update": "Sem dados",
                 "raw_date": None
             }
-
-
-@router.get("/schedule")
-async def get_schedule():
-    """
-    Get scheduler information
-
-    Returns information about the automatic update schedule:
-    - Whether scheduler is running
-    - Next scheduled run time
-    """
-    return {
-        "enabled": scheduler.is_running(),
-        "next_run": scheduler.get_next_run_time(),
-        "timezone": "America/Sao_Paulo",
-        "schedule": "Daily at 19:00 (7 PM Brazil time)"
-    }
