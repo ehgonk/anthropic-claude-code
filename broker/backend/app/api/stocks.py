@@ -176,22 +176,36 @@ async def get_latest_price(
 @router.post("/download/yahoo")
 async def download_stocks_from_yahoo(
     days: int = Query(365, description="Days of historical data"),
+    dataset: str = Query("all", description="Dataset: 'popular' (15), 'ibovespa' (~85), or 'all' (~170)"),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    Download popular Brazilian stocks from Yahoo Finance
+    Download Brazilian stocks from Yahoo Finance
 
-    Downloads data for popular stocks (PETR4, VALE3, ITUB4, etc.)
-    and saves to database with price history.
+    Downloads data for stocks and saves to database with price history.
 
     Args:
         days: Number of days of historical data (default: 365)
+        dataset: Which dataset to download:
+            - 'popular': 15 most popular stocks
+            - 'ibovespa': ~85 Ibovespa index stocks
+            - 'all': ~170 B3 stocks (all major liquid stocks)
     """
-    logger.info(f"📥 Downloading stocks from Yahoo Finance ({days} days)...")
+    logger.info(f"📥 Downloading {dataset} stocks from Yahoo Finance ({days} days)...")
 
     try:
-        # Fetch stock data from Yahoo Finance
-        stock_data = await yahoo_finance_service.get_popular_stocks(days=days)
+        # Fetch stock data from Yahoo Finance based on dataset
+        if dataset == "popular":
+            stock_data = await yahoo_finance_service.get_popular_stocks(days=days)
+        elif dataset == "ibovespa":
+            stock_data = await yahoo_finance_service.get_ibovespa_stocks(days=days)
+        elif dataset == "all":
+            stock_data = await yahoo_finance_service.get_all_b3_stocks(days=days)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid dataset '{dataset}'. Use 'popular', 'ibovespa', or 'all'"
+            )
 
         if not stock_data:
             raise HTTPException(status_code=404, detail="No stock data returned from Yahoo Finance")
@@ -257,6 +271,7 @@ async def download_stocks_from_yahoo(
         return {
             "status": "success",
             "source": "yahoo_finance",
+            "dataset": dataset,
             "stocks_downloaded": stocks_updated,
             "price_records_inserted": total_prices,
             "symbols": list(stock_data.keys())

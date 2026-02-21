@@ -25,6 +25,14 @@ from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
+# Import B3 stocks list
+try:
+    from ..config.b3_stocks import ALL_B3_STOCKS, IBOVESPA_STOCKS
+except ImportError:
+    # Fallback if config not available
+    ALL_B3_STOCKS = []
+    IBOVESPA_STOCKS = []
+
 # Yahoo Finance API base URL
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart"
 
@@ -340,6 +348,48 @@ class YahooFinanceService:
         start_date = end_date - timedelta(days=days)
 
         return await self.fetch_stock_data(self.POPULAR_STOCKS, start_date, end_date)
+
+    async def get_all_b3_stocks(self, days: int = 365) -> Dict[str, Dict]:
+        """
+        Fetch data for ALL B3 stocks (~170 stocks)
+
+        Args:
+            days: Number of days of historical data
+
+        Returns:
+            Dictionary with stock data
+        """
+        if not ALL_B3_STOCKS:
+            logger.warning("ALL_B3_STOCKS not available, falling back to POPULAR_STOCKS")
+            return await self.get_popular_stocks(days)
+
+        logger.info(f"📊 Fetching {len(ALL_B3_STOCKS)} B3 stocks...")
+
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+
+        return await self.fetch_stock_data(ALL_B3_STOCKS, start_date, end_date)
+
+    async def get_ibovespa_stocks(self, days: int = 365) -> Dict[str, Dict]:
+        """
+        Fetch data for Ibovespa stocks (~85 stocks)
+
+        Args:
+            days: Number of days of historical data
+
+        Returns:
+            Dictionary with stock data
+        """
+        if not IBOVESPA_STOCKS:
+            logger.warning("IBOVESPA_STOCKS not available, falling back to POPULAR_STOCKS")
+            return await self.get_popular_stocks(days)
+
+        logger.info(f"📊 Fetching {len(IBOVESPA_STOCKS)} Ibovespa stocks...")
+
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+
+        return await self.fetch_stock_data(IBOVESPA_STOCKS, start_date, end_date)
 
     async def search_stock(self, query: str) -> List[Dict]:
         """
