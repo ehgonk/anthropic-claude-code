@@ -8,6 +8,7 @@ from .database import init_db
 from .api.routes import router
 from .api.stocks import router as stocks_router
 from .api.update import router as update_router
+from .api.ibovespa import router as ibovespa_router
 from .services.auto_update import AutoUpdateService
 from .logging_config import setup_logging
 import logging
@@ -57,6 +58,7 @@ app.add_middleware(
 app.include_router(router)
 app.include_router(stocks_router, prefix="/api")
 app.include_router(update_router, prefix="/api")
+app.include_router(ibovespa_router, prefix="/api")
 
 
 # Exception handlers

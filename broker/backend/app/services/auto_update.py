@@ -204,10 +204,14 @@ class AutoUpdateService:
         self.status.start_run()
 
         try:
-            # Update Ibovespa index FIRST (independent from COTAHIST)
-            logger.info("🔄 Updating Ibovespa index...")
-            ibov_result = await ibovespa_service.run_incremental_update()
-            logger.info(f"✅ Ibovespa update: {ibov_result['records_inserted']} new records")
+            # Ibovespa update DISABLED (manual upload only)
+            # Use POST /api/ibovespa/upload to manually upload B3 data
+            logger.info("⚠️ Ibovespa auto-update disabled (manual upload only)")
+            ibov_result = {
+                'status': 'manual_only',
+                'symbol': 'IBOV',
+                'message': 'Ibovespa requires manual upload from B3'
+            }
 
             async with AsyncSessionLocal() as db:
                 # Get years to update
