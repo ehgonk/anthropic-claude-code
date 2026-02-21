@@ -94,13 +94,15 @@ class YahooFinanceService:
 
             logger.info(f"📥 Downloading {self.IBOVESPA_SYMBOL}...")
 
-            ticker = yf.Ticker(self.IBOVESPA_SYMBOL)
-
-            # Get historical data
-            df = ticker.history(
+            # Use yf.download() instead of Ticker().history() - more reliable for Brazilian stocks
+            df = yf.download(
+                self.IBOVESPA_SYMBOL,
                 start=start_date.strftime('%Y-%m-%d'),
                 end=end_date.strftime('%Y-%m-%d'),
-                interval='1d'
+                interval='1d',
+                progress=False,
+                auto_adjust=False,
+                threads=False
             )
 
             if df.empty:
@@ -199,27 +201,36 @@ class YahooFinanceService:
 
             results = {}
 
-            for symbol in symbols:
+            # Add .SA suffix to all symbols
+            yahoo_symbols = [self._add_suffix(s) for s in symbols]
+
+            # Download all at once - more efficient
+            logger.info(f"Downloading {len(yahoo_symbols)} symbols...")
+            df_all = yf.download(
+                yahoo_symbols,
+                start=start_date.strftime('%Y-%m-%d'),
+                end=end_date.strftime('%Y-%m-%d'),
+                interval='1d',
+                progress=False,
+                auto_adjust=False,
+                group_by='ticker',
+                threads=True
+            )
+
+            # Process each symbol
+            for i, symbol in enumerate(symbols):
                 try:
-                    yahoo_symbol = self._add_suffix(symbol)
-                    logger.debug(f"Fetching {yahoo_symbol}...")
+                    yahoo_symbol = yahoo_symbols[i]
 
-                    ticker = yf.Ticker(yahoo_symbol)
-
-                    # Get historical data
-                    df = ticker.history(
-                        start=start_date.strftime('%Y-%m-%d'),
-                        end=end_date.strftime('%Y-%m-%d'),
-                        interval='1d'
-                    )
+                    # Extract data for this symbol
+                    if len(yahoo_symbols) == 1:
+                        df = df_all
+                    else:
+                        df = df_all[yahoo_symbol]
 
                     if df.empty:
                         logger.warning(f"No data for {symbol}")
                         continue
-
-                    # Get stock info
-                    info = ticker.info
-                    name = info.get('longName') or info.get('shortName') or symbol
 
                     # Convert DataFrame to price records
                     prices = []
@@ -252,6 +263,14 @@ class YahooFinanceService:
                     else:
                         change_pct = 0.0
 
+                    # Get stock info for name
+                    try:
+                        ticker = yf.Ticker(yahoo_symbol)
+                        info = ticker.info
+                        name = info.get('longName') or info.get('shortName') or symbol
+                    except:
+                        name = symbol
+
                     results[symbol] = {
                         'symbol': symbol,
                         'name': name,
@@ -264,7 +283,7 @@ class YahooFinanceService:
                     logger.info(f"✅ {symbol}: {len(prices)} records")
 
                 except Exception as e:
-                    logger.error(f"❌ Failed to fetch {symbol}: {e}")
+                    logger.error(f"❌ Failed to process {symbol}: {e}")
                     continue
 
             return results
@@ -340,20 +359,22 @@ class YahooFinanceService:
             import yfinance as yf
             from datetime import timedelta
 
-            # Test with Ibovespa - download last 5 days
-            test_symbol = self.IBOVESPA_SYMBOL  # ^BVSP
+            # Test with a known Brazilian stock - VALE3.SA
+            test_symbol = "VALE3.SA"
             logger.info(f"Testing Yahoo Finance connection with {test_symbol}...")
 
-            ticker = yf.Ticker(test_symbol)
-
-            # Try to download recent data (last 5 days)
+            # Try to download recent data (last 30 days)
             end_date = datetime.now()
-            start_date = end_date - timedelta(days=5)
+            start_date = end_date - timedelta(days=30)
 
-            df = ticker.history(
+            # Use yf.download() - more reliable
+            df = yf.download(
+                test_symbol,
                 start=start_date.strftime('%Y-%m-%d'),
                 end=end_date.strftime('%Y-%m-%d'),
-                interval='1d'
+                interval='1d',
+                progress=False,
+                auto_adjust=False
             )
 
             if not df.empty:
