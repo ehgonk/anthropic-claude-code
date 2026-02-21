@@ -338,25 +338,46 @@ class YahooFinanceService:
         """Test connection to Yahoo Finance"""
         try:
             import yfinance as yf
+            from datetime import timedelta
 
-            # Test with a known stock
-            test_symbol = "PETR4.SA"
+            # Test with Ibovespa - download last 5 days
+            test_symbol = self.IBOVESPA_SYMBOL  # ^BVSP
+            logger.info(f"Testing Yahoo Finance connection with {test_symbol}...")
+
             ticker = yf.Ticker(test_symbol)
-            info = ticker.info
 
-            if info and info.get('symbol'):
+            # Try to download recent data (last 5 days)
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=5)
+
+            df = ticker.history(
+                start=start_date.strftime('%Y-%m-%d'),
+                end=end_date.strftime('%Y-%m-%d'),
+                interval='1d'
+            )
+
+            if not df.empty:
+                record_count = len(df)
+                latest_date = df.index[-1].strftime('%Y-%m-%d')
+                latest_close = float(df.iloc[-1]['Close'])
+
                 return {
                     'status': 'ok',
-                    'message': f'Successfully connected to Yahoo Finance (tested with {test_symbol})',
-                    'test_symbol': test_symbol
+                    'message': f'Successfully connected to Yahoo Finance',
+                    'test_symbol': test_symbol,
+                    'records_fetched': record_count,
+                    'latest_date': latest_date,
+                    'latest_close': latest_close
                 }
             else:
                 return {
                     'status': 'warning',
-                    'message': 'Connected but no data returned'
+                    'message': 'Connected but no data returned',
+                    'test_symbol': test_symbol
                 }
 
         except Exception as e:
+            logger.error(f"Yahoo Finance test failed: {e}")
             return {
                 'status': 'error',
                 'message': str(e)
