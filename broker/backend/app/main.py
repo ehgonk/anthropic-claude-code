@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from .config import settings
 from .database import init_db
@@ -85,6 +87,26 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-@app.get("/")
+@app.get("/api")
 async def root():
     return {"message": "Broker API - B3 Stock Market"}
+
+
+# Mount static files (frontend build)
+frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
+if frontend_dist.exists():
+    # Serve static assets (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=frontend_dist / "assets"), name="assets")
+
+    # Serve index.html for all other routes (SPA support)
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        """Serve frontend for all non-API routes"""
+        # If it's an API route, let FastAPI handle it (this won't be reached)
+        if full_path.startswith("api/"):
+            return JSONResponse({"error": "Not found"}, status_code=404)
+
+        # Serve index.html for all other routes
+        return FileResponse(frontend_dist / "index.html")
+else:
+    logger.warning(f"Frontend dist directory not found: {frontend_dist}")
