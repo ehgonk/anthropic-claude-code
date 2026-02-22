@@ -30,7 +30,7 @@ except ImportError:
 
 # Configurações
 DATABASE_PATH = backend_path / "data" / "broker.db"
-HISTORICAL_START_YEAR = 1994
+HISTORICAL_START_YEAR = 2000  # Ano inicial (2000 = início do Real estável)
 BATCH_SIZE_YEARS = 3
 BATCH_DELAY_SECONDS = 2
 STOCK_DELAY_SECONDS = 1.5  # Delay entre ações (aumentado para evitar rate limiting)
@@ -354,7 +354,7 @@ def main():
         print("\n⚡ Este script NÃO precisa do backend rodando!")
         print("\nUso:")
         print("  python scripts/download_data_standalone.py stats     # Ver estatísticas")
-        print("  python scripts/download_data_standalone.py all       # Baixar tudo (1994-2026)")
+        print("  python scripts/download_data_standalone.py all       # Baixar tudo (2000-2026)")
         print("  python scripts/download_data_standalone.py year 2023 # Baixar ano específico")
         print("  python scripts/download_data_standalone.py daily     # Atualizar últimos 7 dias")
         print()
