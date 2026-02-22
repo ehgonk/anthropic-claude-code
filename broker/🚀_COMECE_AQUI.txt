@@ -1,0 +1,125 @@
+╔═══════════════════════════════════════════════════════════════╗
+║                                                               ║
+║          🚀 BROKER PROJECT - DOWNLOAD HISTÓRICO 🚀           ║
+║                                                               ║
+║           Dados de 1994 até 2026 em R$ (Real)                ║
+║                                                               ║
+╚═══════════════════════════════════════════════════════════════╝
+
+
+═══════════════════════════════════════════════════════════════
+  📖 ESCOLHA SEU MÉTODO (WINDOWS)
+═══════════════════════════════════════════════════════════════
+
+┌───────────────────────────────────────────────────────────────┐
+│  ✨ MÉTODO 1: MAIS FÁCIL - Duplo Clique                       │
+├───────────────────────────────────────────────────────────────┤
+│                                                               │
+│  1. Dê DUPLO CLIQUE em:                                      │
+│     👉 download_historico.bat                                │
+│                                                               │
+│  2. Siga as instruções na tela                               │
+│                                                               │
+│  3. Aguarde 5-10 minutos                                     │
+│                                                               │
+│  4. Pronto! ✅                                               │
+│                                                               │
+└───────────────────────────────────────────────────────────────┘
+
+
+┌───────────────────────────────────────────────────────────────┐
+│  🚀 MÉTODO 2: Script PowerShell                               │
+├───────────────────────────────────────────────────────────────┤
+│                                                               │
+│  1. Abra PowerShell nesta pasta (Shift + Clique direito)    │
+│                                                               │
+│  2. Execute:                                                  │
+│     .\download_historico.ps1                                 │
+│                                                               │
+│  3. Aguarde conclusão                                        │
+│                                                               │
+└───────────────────────────────────────────────────────────────┘
+
+
+┌───────────────────────────────────────────────────────────────┐
+│  📝 MÉTODO 3: Comandos Manuais                                │
+├───────────────────────────────────────────────────────────────┤
+│                                                               │
+│  1. Abra PowerShell nesta pasta                              │
+│                                                               │
+│  2. Execute passo a passo:                                    │
+│     python -m venv backend\venv                              │
+│     .\backend\venv\Scripts\Activate.ps1                      │
+│     pip install -r backend\requirements.txt                  │
+│     python scripts\download_data.py all                      │
+│                                                               │
+└───────────────────────────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════
+  📚 DOCUMENTAÇÃO COMPLETA
+═══════════════════════════════════════════════════════════════
+
+  📖 LEIA-ME-WINDOWS.md      → Guia rápido resumido
+  📖 DOWNLOAD_WINDOWS.md     → Guia completo passo a passo
+  📖 README.md               → Documentação do projeto
+
+
+═══════════════════════════════════════════════════════════════
+  📊 O QUE SERÁ BAIXADO
+═══════════════════════════════════════════════════════════════
+
+  ✅ 33 anos de histórico (1994-2026)
+  ✅ 11 batches de 3 anos cada
+  ✅ ~30 ações principais do Ibovespa
+  ✅ ~300.000 registros de cotações
+  ✅ Apenas cotações em R$ (Real)
+  ✅ Banco SQLite unificado
+  ✅ Tempo estimado: 5-10 minutos
+
+
+═══════════════════════════════════════════════════════════════
+  ⚠️ REQUISITOS
+═══════════════════════════════════════════════════════════════
+
+  ✅ Python 3.8 ou superior
+  ✅ Conexão com internet
+  ✅ ~100 MB de espaço em disco
+
+
+═══════════════════════════════════════════════════════════════
+  🎯 APÓS O DOWNLOAD
+═══════════════════════════════════════════════════════════════
+
+  Iniciar aplicação:
+
+  Terminal 1 (Backend):
+    cd backend
+    .\venv\Scripts\Activate.ps1
+    uvicorn app.main:app --reload
+
+  Terminal 2 (Frontend):
+    cd frontend
+    npm run dev
+
+  Acesse: http://localhost:5174
+
+
+═══════════════════════════════════════════════════════════════
+  ✅ VERIFICAR SUCESSO
+═══════════════════════════════════════════════════════════════
+
+  python scripts\download_data.py stats
+
+  Deve mostrar:
+    Total de registros: 200.000+
+    Total de ações: 30
+    Primeira data: 1994-07-01
+    Última data: 2026-02-21
+
+
+═══════════════════════════════════════════════════════════════
+
+              🎉 Boa sorte com o projeto! 🎉
+
+═══════════════════════════════════════════════════════════════
