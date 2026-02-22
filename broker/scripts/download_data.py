@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
-Script simples para download de dados históricos
+Script para download de dados históricos via Yahoo Finance
+
+FONTE DE DADOS: Yahoo Finance (ÚNICA)
 Uso: python download_data.py [opção]
 """
 
@@ -11,11 +13,12 @@ API_BASE_URL = "http://localhost:8001/api"
 
 
 def check_stats():
-    """Verifica estatísticas"""
+    """Verifica estatísticas do banco de dados"""
     response = requests.get(f"{API_BASE_URL}/data/stats")
     stats = response.json()
 
-    print("\n📊 ESTATÍSTICAS DOS DADOS:")
+    print("\n📊 ESTAT ÍSTICAS DO BANCO DE DADOS:")
+    print(f"   Fonte de dados: Yahoo Finance")
     print(f"   Total de registros: {stats.get('total_records', 0):,}")
     print(f"   Total de ações: {stats.get('total_stocks', 0)}")
     print(f"   Primeira data: {stats.get('first_date', 'N/A')}")
@@ -25,8 +28,9 @@ def check_stats():
 
 
 def download_all():
-    """Baixa todos os dados históricos"""
-    print("\n📥 INICIANDO DOWNLOAD COMPLETO (1994-2026)...\n")
+    """Baixa todos os dados históricos via Yahoo Finance"""
+    print("\n📥 DOWNLOAD COMPLETO VIA YAHOO FINANCE (1994-2026)...\n")
+    print("   Fonte: Yahoo Finance API")
 
     response = requests.post(f"{API_BASE_URL}/update/download-historical", json={
         "start_year": 1994,
@@ -36,6 +40,7 @@ def download_all():
 
     result = response.json()
     print(f"\n✅ CONCLUÍDO!")
+    print(f"   Fonte: Yahoo Finance")
     print(f"   Registros inseridos: {result.get('records_inserted', 0):,}")
     print(f"   Ações processadas: {result.get('stocks_processed', 0)}\n")
 
@@ -66,10 +71,11 @@ def update_daily():
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("\n🔥 BROKER - Download de Dados B3")
+        print("\n🔥 BROKER - Download via Yahoo Finance")
+        print("\nFonte de dados: Yahoo Finance (ÚNICA)")
         print("\nUso:")
-        print("  python download_data.py stats          # Ver estatísticas")
-        print("  python download_data.py all            # Baixar tudo (1994-hoje)")
+        print("  python download_data.py stats          # Ver estatísticas do banco")
+        print("  python download_data.py all            # Baixar tudo via Yahoo Finance")
         print("  python download_data.py year 2023      # Baixar ano específico")
         print("  python download_data.py daily          # Atualizar dados diários\n")
         sys.exit(1)
