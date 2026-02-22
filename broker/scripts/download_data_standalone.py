@@ -52,6 +52,16 @@ def setup_database():
     engine = create_engine(f"sqlite:///{DATABASE_PATH}")
 
     with engine.connect() as conn:
+        # Verificar se a tabela existe e tem o schema correto
+        try:
+            result = conn.execute(text("SELECT symbol, date FROM stock_prices LIMIT 1"))
+            result.fetchone()
+        except Exception:
+            # Schema incompatível ou tabela não existe - recriar
+            print("   ⚠️  Schema incompatível detectado. Recriando tabela...")
+            conn.execute(text("DROP TABLE IF EXISTS stock_prices"))
+            conn.commit()
+
         # Criar tabela stock_prices se não existir
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS stock_prices (
