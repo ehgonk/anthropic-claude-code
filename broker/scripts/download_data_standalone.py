@@ -166,8 +166,10 @@ def download_stock_data(symbol, start_date, end_date):
 
         return records
 
-    except Exception as e:
-        print(f"      ❌ Erro ao baixar {symbol}: {str(e)}")
+    except KeyboardInterrupt:
+        raise  # Re-raise keyboard interrupt to allow clean exit
+    except Exception:
+        # Silenciar erros - retornar lista vazia
         return []
 
 
