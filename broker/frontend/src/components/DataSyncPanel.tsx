@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import api, { type DataStats, type UpdateStatus } from '../services/api'
 
 export default function DataSyncPanel() {
+  console.log('%c✅ DATA SYNC PANEL RENDERIZADO! Painel está visível!',
+    'background: #0066ff; color: #fff; font-size: 16px; padding: 8px; font-weight: bold;')
+
   const [stats, setStats] = useState<DataStats | null>(null)
   const [status, setStatus] = useState<UpdateStatus | null>(null)
   const [loading, setLoading] = useState(false)

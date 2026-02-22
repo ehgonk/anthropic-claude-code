@@ -43,6 +43,10 @@ function makeEmptyPanels(): ChartPanel[] {
 }
 
 function App() {
+  // 🔥 DATA SYNC PANEL ESTÁ ATIVO! Versão atualizada carregada! 🔥
+  console.log('%c🔥 DATA SYNC PANEL ATIVO! Clique no ícone 💾 na barra lateral! 🔥',
+    'background: #00ff00; color: #000; font-size: 20px; padding: 10px; font-weight: bold;')
+
   const [themeMode, setThemeMode] = useState<ThemeMode>('light')
   const [isDark, setIsDark] = useState(false)
   const [stocks, setStocks] = useState<Stock[]>([])
