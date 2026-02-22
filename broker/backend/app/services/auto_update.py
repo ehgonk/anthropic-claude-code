@@ -5,11 +5,17 @@ This service automatically downloads and updates stock data from Yahoo Finance
 on a scheduled basis (daily by default).
 
 ⚠️ FONTE ÚNICA: Yahoo Finance - B3 não é mais utilizada
+
+📅 HISTÓRICO COMPLETO:
+- Download desde 1994 (início do Real - R$)
+- Batches sequenciais para respeitar limites da API
+- Sincronização inteligente com verificação de gaps
 """
 
 import logging
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+import asyncio
+from datetime import datetime, timedelta, date
+from typing import Optional, Dict, Any, List, Tuple
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +26,15 @@ from ..seed import TARGET_STOCKS
 
 # Configure logger
 logger = logging.getLogger(__name__)
+
+# Data de início para downloads históricos (início do Real - R$)
+HISTORICAL_START_YEAR = 1994
+
+# Tamanho do batch (anos por batch)
+BATCH_SIZE_YEARS = 3
+
+# Delay entre batches (segundos) para evitar rate limiting
+BATCH_DELAY_SECONDS = 2
 
 
 class UpdateStatus:
@@ -74,49 +89,119 @@ class AutoUpdateService:
         last_date = result.scalar_one_or_none()
         return last_date
 
-    async def get_missing_years(self, db: AsyncSession) -> list[int]:
-        """Get list of years that need to be updated"""
-        last_date_str = await self.get_last_date(db)
+    async def get_year_stats(self, db: AsyncSession) -> Dict[int, int]:
+        """Get count of records per year in database"""
+        result = await db.execute(
+            select(
+                func.strftime('%Y', StockPrice.date).label('year'),
+                func.count().label('count')
+            ).group_by('year')
+        )
+        year_stats = {int(row.year): row.count for row in result}
+        return year_stats
 
-        if not last_date_str:
-            # No data yet, start from 2024
-            current_year = datetime.now().year
-            return list(range(2024, current_year + 1))
+    async def get_missing_years(self, db: AsyncSession, force_full: bool = False) -> List[int]:
+        """
+        Get list of years that need to be updated
 
-        # Parse last date
-        last_date = datetime.strptime(last_date_str, "%Y-%m-%d")
-        current_date = datetime.now()
+        Args:
+            force_full: If True, return all years since 1994 for full historical download
 
-        # Check if we need to update
-        days_behind = (current_date - last_date).days
+        Returns:
+            List of years to update
+        """
+        current_year = datetime.now().year
 
-        if days_behind <= 1:
-            # Data is up to date
-            logger.info(f"Data is up to date (last date: {last_date_str})")
+        if force_full:
+            # Full historical download desde 1994
+            years = list(range(HISTORICAL_START_YEAR, current_year + 1))
+            logger.info(f"🔄 Full historical download: {len(years)} years ({HISTORICAL_START_YEAR}-{current_year})")
+            return years
+
+        # Get existing data stats
+        year_stats = await self.get_year_stats(db)
+
+        if not year_stats:
+            # No data yet, download all historical data
+            years = list(range(HISTORICAL_START_YEAR, current_year + 1))
+            logger.info(f"📥 No data found, downloading all historical data: {len(years)} years")
+            return years
+
+        # Check for gaps and missing years
+        missing_years = []
+
+        # Check all years from 1994 to current
+        for year in range(HISTORICAL_START_YEAR, current_year + 1):
+            if year not in year_stats:
+                missing_years.append(year)
+            elif year_stats[year] < 100:  # Less than 100 records = incomplete year
+                logger.warning(f"⚠️ Year {year} has only {year_stats[year]} records, marking for re-download")
+                missing_years.append(year)
+
+        if missing_years:
+            logger.info(f"📊 Found {len(missing_years)} missing/incomplete years: {missing_years[:5]}{'...' if len(missing_years) > 5 else ''}")
+        else:
+            logger.info(f"✅ All years from {HISTORICAL_START_YEAR} to {current_year} are present")
+
+        return missing_years
+
+    def create_year_batches(self, years: List[int]) -> List[List[int]]:
+        """
+        Split years into batches for sequential download
+
+        Args:
+            years: List of years to download
+
+        Returns:
+            List of year batches
+        """
+        if not years:
             return []
 
-        # Get years that need updating
-        years_to_update = []
-        year = last_date.year
-        current_year = current_date.year
+        batches = []
+        current_batch = []
 
-        while year <= current_year:
-            years_to_update.append(year)
-            year += 1
+        for year in sorted(years):
+            current_batch.append(year)
+            if len(current_batch) >= BATCH_SIZE_YEARS:
+                batches.append(current_batch)
+                current_batch = []
 
-        return years_to_update
+        # Add remaining years
+        if current_batch:
+            batches.append(current_batch)
 
-    async def update_year(self, db: AsyncSession, year: int) -> Dict[str, Any]:
+        logger.info(f"📦 Created {len(batches)} batches of ~{BATCH_SIZE_YEARS} years each")
+        return batches
+
+    async def update_year_range(
+        self,
+        db: AsyncSession,
+        start_year: int,
+        end_year: int
+    ) -> Dict[str, Any]:
         """
-        Update data for a specific year using Yahoo Finance
+        Update data for a range of years using Yahoo Finance
 
-        Returns statistics about the update
+        Args:
+            db: Database session
+            start_year: First year to download
+            end_year: Last year to download
+
+        Returns:
+            Statistics about the update
         """
-        logger.info(f"📥 Downloading data from Yahoo Finance for year {year}")
+        logger.info(f"📥 Downloading data from Yahoo Finance for years {start_year}-{end_year}")
 
-        # Calculate date range for the year
-        start_date = datetime(year, 1, 1)
-        end_date = datetime(year, 12, 31)
+        # Calculate date range
+        start_date = datetime(start_year, 1, 1)
+        end_date = datetime(end_year, 12, 31)
+
+        # Adjust end date if it's in the future
+        now = datetime.now()
+        if end_date > now:
+            end_date = now
+            logger.info(f"   Adjusted end date to today: {end_date.strftime('%Y-%m-%d')}")
 
         # Download from Yahoo Finance
         stock_records = await yahoo_finance_service.fetch_stock_data(
@@ -126,8 +211,8 @@ class AutoUpdateService:
         )
 
         if not stock_records:
-            logger.warning(f"No data found for year {year}")
-            return {"year": year, "stocks": 0, "prices": 0}
+            logger.warning(f"⚠️ No data found for years {start_year}-{end_year}")
+            return {"years": f"{start_year}-{end_year}", "stocks": 0, "prices": 0}
 
         total_prices = 0
         stocks_updated = 0
@@ -151,7 +236,7 @@ class AutoUpdateService:
                 db.add(stock)
                 await db.flush()
             else:
-                # Update existing stock
+                # Update existing stock with latest data
                 stock.name = stock_data['name']
                 stock.price = stock_data['price']
                 stock.change_percent = stock_data['change_percent']
@@ -186,20 +271,31 @@ class AutoUpdateService:
 
         await db.commit()
 
-        logger.info(f"Updated {stocks_updated} stocks with {total_prices} new prices for year {year}")
+        logger.info(f"✅ Updated {stocks_updated} stocks with {total_prices} new prices for {start_year}-{end_year}")
 
         return {
-            "year": year,
+            "years": f"{start_year}-{end_year}",
             "stocks": stocks_updated,
             "prices": total_prices
         }
 
-    async def run_update(self, force: bool = False) -> Dict[str, Any]:
+    async def update_year(self, db: AsyncSession, year: int) -> Dict[str, Any]:
         """
-        Run the auto-update process
+        Update data for a specific year using Yahoo Finance
+
+        Returns statistics about the update
+        """
+        result = await self.update_year_range(db, year, year)
+        result["year"] = year
+        return result
+
+    async def run_update(self, force: bool = False, full_historical: bool = False) -> Dict[str, Any]:
+        """
+        Run the auto-update process with sequential batching
 
         Args:
-            force: If True, download all years. If False, only missing data.
+            force: If True, re-download existing data
+            full_historical: If True, download ALL data from 1994 to now
 
         Returns:
             Statistics about the update
@@ -220,18 +316,12 @@ class AutoUpdateService:
 
             async with AsyncSessionLocal() as db:
                 # Get years to update
-                if force:
-                    current_year = datetime.now().year
-                    years = list(range(2024, current_year + 1))
-                    logger.info(f"Force update: downloading {len(years)} years")
-                else:
-                    years = await self.get_missing_years(db)
-                    logger.info(f"Incremental update: {len(years)} years to update")
+                years = await self.get_missing_years(db, force_full=full_historical or force)
 
                 if not years:
                     stats = {
                         "status": "up_to_date",
-                        "message": "Data is already up to date",
+                        "message": f"Data is complete from {HISTORICAL_START_YEAR} to {datetime.now().year}",
                         "years": 0,
                         "stocks": 0,
                         "prices": 0,
@@ -240,29 +330,52 @@ class AutoUpdateService:
                     self.status.finish_run(success=True, stats=stats)
                     return stats
 
-                # Update each year
+                # Create batches for sequential download
+                batches = self.create_year_batches(years)
+
                 total_stocks = 0
                 total_prices = 0
-                year_stats = []
+                batch_stats = []
 
-                for year in years:
-                    year_result = await self.update_year(db, year)
-                    total_stocks += year_result['stocks']
-                    total_prices += year_result['prices']
-                    year_stats.append(year_result)
+                # Process each batch sequentially
+                for batch_idx, year_batch in enumerate(batches, 1):
+                    logger.info(f"🔄 Processing batch {batch_idx}/{len(batches)}: years {year_batch}")
+
+                    # Download batch (years in batch are sequential)
+                    start_year = min(year_batch)
+                    end_year = max(year_batch)
+
+                    batch_result = await self.update_year_range(db, start_year, end_year)
+                    total_stocks += batch_result['stocks']
+                    total_prices += batch_result['prices']
+                    batch_stats.append({
+                        "batch": batch_idx,
+                        "years": year_batch,
+                        **batch_result
+                    })
+
+                    # Add delay between batches (except after last batch)
+                    if batch_idx < len(batches):
+                        logger.info(f"⏸️ Waiting {BATCH_DELAY_SECONDS}s before next batch...")
+                        await asyncio.sleep(BATCH_DELAY_SECONDS)
 
                 stats = {
                     "status": "success",
-                    "years": len(years),
+                    "message": f"Downloaded {len(years)} years in {len(batches)} batches",
+                    "total_years": len(years),
+                    "total_batches": len(batches),
                     "stocks": total_stocks,
                     "prices": total_prices,
                     "ibovespa": ibov_result,
-                    "year_details": year_stats,
+                    "batch_details": batch_stats,
                     "completed_at": datetime.utcnow().isoformat()
                 }
 
                 self.status.finish_run(success=True, stats=stats)
-                logger.info(f"Update completed: {total_stocks} stocks, {total_prices} prices, Ibovespa: {ibov_result.get('status', 'unknown')}")
+                logger.info(
+                    f"✅ Update completed: {len(years)} years, "
+                    f"{total_stocks} stocks, {total_prices} prices"
+                )
 
                 return stats
 
