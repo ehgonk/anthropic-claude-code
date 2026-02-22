@@ -16,6 +16,40 @@ export interface IngestResult {
   symbols: string[]
 }
 
+export interface DataStats {
+  first_date: string | null
+  last_date: string | null
+  total_records: number
+  total_stocks: number
+  years: Array<{ year: number; count: number }>
+  expected_start_year: number
+  coverage_complete: boolean
+}
+
+export interface UpdateStatus {
+  last_run: string | null
+  last_success: string | null
+  last_error: string | null
+  is_running: boolean
+  stats: any
+}
+
+export interface UpdateResult {
+  status: string
+  message: string
+  total_years: number
+  total_batches: number
+  stocks: number
+  prices: number
+  batch_details: Array<{
+    batch: number
+    years: number[]
+    stocks: number
+    prices: number
+  }>
+  completed_at: string
+}
+
 const api = {
   async getStocks(): Promise<Stock[]> {
     console.log('📡 Fetching stocks...')
@@ -70,6 +104,45 @@ const api = {
       cache: 'no-cache'
     })
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    return await response.json()
+  },
+
+  async getDataStats(): Promise<DataStats> {
+    const response = await fetch(`${API_URL}/data/stats`, {
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-cache'
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    return await response.json()
+  },
+
+  async getUpdateStatus(): Promise<UpdateStatus> {
+    const response = await fetch(`${API_URL}/update/status`, {
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-cache'
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    return await response.json()
+  },
+
+  async runUpdate(force: boolean = false, fullHistorical: boolean = false): Promise<UpdateResult> {
+    const params = new URLSearchParams()
+    if (force) params.append('force', 'true')
+    if (fullHistorical) params.append('full_historical', 'true')
+
+    const url = `${API_URL}/update/run${params.toString() ? '?' + params.toString() : ''}`
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-cache'
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`HTTP ${response.status}: ${errorText}`)
+    }
+
     return await response.json()
   },
 }

@@ -9,6 +9,7 @@ import BarsPanel from './components/BarsPanel'
 import LinesPanel from './components/LinesPanel'
 import WatchlistPanel from './components/WatchlistPanel'
 import LayersPanel from './components/LayersPanel'
+import DataSyncPanel from './components/DataSyncPanel'
 import LayoutPicker, { GridLayout, LAYOUTS } from './components/LayoutPicker'
 import type { ThemeMode } from './components/ThemeSwitcher'
 import api from './services/api'
@@ -281,6 +282,8 @@ function App() {
             onToggleLayer={toggleLayer}
           />
         )}
+
+        {activeTool === 'datasync' && <DataSyncPanel />}
 
         <div className="flex-1 flex flex-col min-w-0">
           {/* Layout control bar */}

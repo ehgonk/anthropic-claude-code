@@ -4,7 +4,8 @@ import {
   LineChart,
   Activity,
   List,
-  Layers
+  Layers,
+  Database
 } from 'lucide-react'
 
 interface LeftBarProps {
@@ -22,6 +23,7 @@ export default function LeftBar({ activeTool, onToolSelect }: LeftBarProps) {
     { id: 'indicators', icon: Activity, label: 'Indicators' },
     { id: 'watchlist', icon: List, label: 'Watchlist' },
     { id: 'layers', icon: Layers, label: 'Layers' },
+    { id: 'datasync', icon: Database, label: 'Data Sync' },
   ]
 
   return (
