@@ -33,6 +33,8 @@ DATABASE_PATH = backend_path / "data" / "broker.db"
 HISTORICAL_START_YEAR = 1994
 BATCH_SIZE_YEARS = 3
 BATCH_DELAY_SECONDS = 2
+STOCK_DELAY_SECONDS = 1.5  # Delay entre ações (aumentado para evitar rate limiting)
+MAX_RETRIES = 3  # Número máximo de tentativas por ação
 
 # Lista de ações principais do Ibovespa
 MAIN_STOCKS = [
@@ -139,8 +141,8 @@ def print_stats(stats):
     print()
 
 
-def download_stock_data(symbol, start_date, end_date):
-    """Baixa dados de uma ação específica via yfinance"""
+def download_stock_data(symbol, start_date, end_date, retry_count=0):
+    """Baixa dados de uma ação específica via yfinance com retry automático"""
     try:
         ticker = yf.Ticker(symbol)
         df = ticker.history(start=start_date, end=end_date)
@@ -168,8 +170,13 @@ def download_stock_data(symbol, start_date, end_date):
 
     except KeyboardInterrupt:
         raise  # Re-raise keyboard interrupt to allow clean exit
-    except Exception:
-        # Silenciar erros - retornar lista vazia
+    except (TimeoutError, ConnectionError, Exception) as e:
+        # Retry com backoff exponencial para timeouts e erros de rede
+        if retry_count < MAX_RETRIES and isinstance(e, (TimeoutError, ConnectionError)):
+            wait_time = 2 ** retry_count  # 1s, 2s, 4s
+            time.sleep(wait_time)
+            return download_stock_data(symbol, start_date, end_date, retry_count + 1)
+        # Silenciar erros após esgotadas as tentativas
         return []
 
 
@@ -226,8 +233,8 @@ def download_batch(engine, years, batch_num, total_batches):
         else:
             print(f"✗ Sem dados")
 
-        # Pequeno delay para evitar rate limiting
-        time.sleep(0.5)
+        # Delay entre ações para evitar rate limiting
+        time.sleep(STOCK_DELAY_SECONDS)
 
     print(f"\n   ✅ Batch concluído: {total_records:,} registros de {successful_stocks} ações")
 
@@ -300,6 +307,9 @@ def download_year(engine, year):
         else:
             print(f"✗ Sem dados")
 
+        # Delay entre ações
+        time.sleep(STOCK_DELAY_SECONDS)
+
     print(f"\n✅ CONCLUÍDO!")
     print(f"   Registros inseridos: {total_records:,}\n")
 
@@ -329,6 +339,9 @@ def download_daily(engine):
             print(f"✓ {len(records)} registros")
         else:
             print(f"✗ Sem dados")
+
+        # Delay entre ações
+        time.sleep(STOCK_DELAY_SECONDS)
 
     print(f"\n✅ CONCLUÍDO!")
     print(f"   Registros inseridos: {total_records:,}\n")
