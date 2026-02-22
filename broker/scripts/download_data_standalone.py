@@ -20,6 +20,7 @@ try:
     import yfinance as yf
     from sqlalchemy import create_engine, text
     from sqlalchemy.orm import sessionmaker
+    import requests
 except ImportError:
     print("\n❌ ERRO: Dependências não instaladas!")
     print("\nExecute primeiro:")
@@ -27,6 +28,12 @@ except ImportError:
     print("  pip install -r requirements.txt")
     print()
     sys.exit(1)
+
+# Configurar sessão do yfinance com User-Agent
+session = requests.Session()
+session.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+})
 
 # Configurações
 DATABASE_PATH = backend_path / "data" / "broker.db"
@@ -144,8 +151,9 @@ def print_stats(stats):
 def download_stock_data(symbol, start_date, end_date, retry_count=0):
     """Baixa dados de uma ação específica via yfinance com retry automático"""
     try:
-        ticker = yf.Ticker(symbol)
-        df = ticker.history(start=start_date, end=end_date)
+        # Usar sessão configurada com User-Agent
+        ticker = yf.Ticker(symbol, session=session)
+        df = ticker.history(start=start_date, end=end_date, timeout=10)
 
         if df.empty:
             return []
@@ -170,13 +178,15 @@ def download_stock_data(symbol, start_date, end_date, retry_count=0):
 
     except KeyboardInterrupt:
         raise  # Re-raise keyboard interrupt to allow clean exit
-    except (TimeoutError, ConnectionError, Exception) as e:
-        # Retry com backoff exponencial para timeouts e erros de rede
-        if retry_count < MAX_RETRIES and isinstance(e, (TimeoutError, ConnectionError)):
+    except Exception as e:
+        # Retry com backoff exponencial
+        if retry_count < MAX_RETRIES:
             wait_time = 2 ** retry_count  # 1s, 2s, 4s
+            if retry_count == 0:  # Mostrar erro apenas na primeira tentativa
+                print(f"⚠️ Tentando novamente ({retry_count + 1}/{MAX_RETRIES})...", end=" ", flush=True)
             time.sleep(wait_time)
             return download_stock_data(symbol, start_date, end_date, retry_count + 1)
-        # Silenciar erros após esgotadas as tentativas
+        # Após esgotar tentativas, retornar vazio
         return []
 
 
@@ -314,6 +324,56 @@ def download_year(engine, year):
     print(f"   Registros inseridos: {total_records:,}\n")
 
 
+def download_test(engine):
+    """Testa download com poucas ações nos últimos 6 meses"""
+    print("\n🧪 MODO DE TESTE - Últimos 6 meses, 5 ações...\n")
+
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=180)  # ~6 meses
+
+    # Apenas 5 ações principais para teste
+    test_stocks = ['PETR4.SA', 'VALE3.SA', 'ITUB4.SA', 'BBDC4.SA', 'B3SA3.SA']
+
+    total_records = 0
+    successful = 0
+
+    for i, symbol in enumerate(test_stocks, 1):
+        clean_symbol = symbol.replace('.SA', '')
+        print(f"   [{i}/{len(test_stocks)}] {clean_symbol}...", end=" ", flush=True)
+
+        records = download_stock_data(
+            symbol,
+            start_date.strftime('%Y-%m-%d'),
+            end_date.strftime('%Y-%m-%d')
+        )
+
+        if records:
+            inserted = insert_records(engine, records)
+            total_records += inserted
+            successful += 1
+            print(f"✓ {len(records)} registros")
+        else:
+            print(f"✗ Sem dados")
+
+        time.sleep(1)  # Delay menor para teste
+
+    print(f"\n✅ TESTE CONCLUÍDO!")
+    print(f"   Ações com sucesso: {successful}/{len(test_stocks)}")
+    print(f"   Registros inseridos: {total_records:,}")
+
+    if successful == 0:
+        print("\n⚠️  AVISO: Nenhuma ação foi baixada com sucesso!")
+        print("   Possíveis causas:")
+        print("   - Bloqueio do Yahoo Finance")
+        print("   - Problema de rede")
+        print("   - Necessário usar VPN")
+    elif successful < len(test_stocks):
+        print(f"\n⚠️  AVISO: Apenas {successful} de {len(test_stocks)} ações funcionaram")
+    else:
+        print("\n✅ Tudo funcionando! Pode rodar 'all' para download completo")
+    print()
+
+
 def download_daily(engine):
     """Baixa dados dos últimos 7 dias"""
     print("\n📅 ATUALIZANDO DADOS DIÁRIOS (últimos 7 dias)...\n")
@@ -354,9 +414,11 @@ def main():
         print("\n⚡ Este script NÃO precisa do backend rodando!")
         print("\nUso:")
         print("  python scripts/download_data_standalone.py stats     # Ver estatísticas")
+        print("  python scripts/download_data_standalone.py test      # TESTAR com 5 ações (6 meses)")
         print("  python scripts/download_data_standalone.py all       # Baixar tudo (2000-2026)")
         print("  python scripts/download_data_standalone.py year 2023 # Baixar ano específico")
         print("  python scripts/download_data_standalone.py daily     # Atualizar últimos 7 dias")
+        print("\n💡 Dica: Execute 'test' primeiro para verificar se está funcionando!")
         print()
         sys.exit(1)
 
@@ -370,6 +432,9 @@ def main():
     if command == "stats":
         stats = get_stats(engine)
         print_stats(stats)
+
+    elif command == "test":
+        download_test(engine)
 
     elif command == "all":
         stats = get_stats(engine)
