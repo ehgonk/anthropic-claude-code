@@ -76,7 +76,7 @@ if ($LASTEXITCODE -eq 0) {
 Write-Host "[5/6] Verificando banco de dados..." -ForegroundColor Yellow
 Write-Host ""
 
-python scripts\download_data.py stats
+python scripts\download_data_standalone.py stats
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
@@ -103,7 +103,7 @@ Write-Host "⏳ Processando 11 batches de 3 anos cada..." -ForegroundColor Cyan
 Write-Host ""
 
 # Executar download
-python scripts\download_data.py all
+python scripts\download_data_standalone.py all
 
 # ============================================
 # Verificar resultado
@@ -114,7 +114,7 @@ Write-Host "  RESULTADO FINAL" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-python scripts\download_data.py stats
+python scripts\download_data_standalone.py stats
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan

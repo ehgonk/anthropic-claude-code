@@ -63,7 +63,7 @@ echo.
 REM Verificar status
 echo [5/6] Verificando banco de dados...
 echo.
-python scripts\download_data.py stats
+python scripts\download_data_standalone.py stats
 echo.
 
 echo ============================================
@@ -85,7 +85,7 @@ echo Isso pode levar 5-10 minutos...
 echo Processando 11 batches de 3 anos cada...
 echo.
 
-python scripts\download_data.py all
+python scripts\download_data_standalone.py all
 
 REM Resultado
 echo.
@@ -94,7 +94,7 @@ echo   RESULTADO FINAL
 echo ============================================
 echo.
 
-python scripts\download_data.py stats
+python scripts\download_data_standalone.py stats
 
 echo.
 echo ============================================
