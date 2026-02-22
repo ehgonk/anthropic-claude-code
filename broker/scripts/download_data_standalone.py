@@ -39,9 +39,14 @@ session.headers.update({
 DATABASE_PATH = backend_path / "data" / "broker.db"
 HISTORICAL_START_YEAR = 2000  # Ano inicial (2000 = início do Real estável)
 BATCH_SIZE_YEARS = 3
-BATCH_DELAY_SECONDS = 2
-STOCK_DELAY_SECONDS = 1.5  # Delay entre ações (aumentado para evitar rate limiting)
+BATCH_DELAY_SECONDS = 5  # Aumentado para evitar rate limiting
+STOCK_DELAY_SECONDS = 3  # Delay entre ações (aumentado para evitar rate limiting)
 MAX_RETRIES = 3  # Número máximo de tentativas por ação
+
+# Modo SLOW - para evitar rate limiting agressivo do Yahoo Finance
+SLOW_MODE_ENABLED = False  # Ativar com parâmetro --slow
+SLOW_MODE_STOCK_DELAY = 10  # Delay entre ações no modo slow
+SLOW_MODE_BATCH_DELAY = 30  # Delay entre batches no modo slow
 
 # Lista de ações principais do Ibovespa
 MAIN_STOCKS = [
@@ -148,6 +153,17 @@ def print_stats(stats):
     print()
 
 
+def wait_for_rate_limit_reset(wait_minutes=15):
+    """Aguarda o rate limit do Yahoo Finance expirar"""
+    print(f"\n⏳ Aguardando {wait_minutes} minutos para rate limit expirar...")
+    for remaining in range(wait_minutes * 60, 0, -30):
+        mins = remaining // 60
+        secs = remaining % 60
+        print(f"   ⏱️  Tempo restante: {mins}m {secs}s", end='\r', flush=True)
+        time.sleep(min(30, remaining))
+    print("\n   ✅ Pronto para continuar!                    ")
+
+
 def download_stock_data(symbol, start_date, end_date, retry_count=0):
     """Baixa dados de uma ação específica via yfinance com retry automático"""
     try:
@@ -214,7 +230,7 @@ def insert_records(engine, records):
     return inserted
 
 
-def download_batch(engine, years, batch_num, total_batches):
+def download_batch(engine, years, batch_num, total_batches, slow_mode=False):
     """Baixa dados de um batch de anos"""
     start_year = min(years)
     end_year = max(years)
@@ -222,9 +238,16 @@ def download_batch(engine, years, batch_num, total_batches):
     start_date = f"{start_year}-01-01"
     end_date = f"{end_year}-12-31"
 
-    print(f"\n📦 Batch {batch_num}/{total_batches}: {start_year}-{end_year}")
+    # Determinar delays baseado no modo
+    stock_delay = SLOW_MODE_STOCK_DELAY if slow_mode else STOCK_DELAY_SECONDS
+    batch_delay = SLOW_MODE_BATCH_DELAY if slow_mode else BATCH_DELAY_SECONDS
+
+    mode_label = " (MODO SLOW 🐌)" if slow_mode else ""
+    print(f"\n📦 Batch {batch_num}/{total_batches}: {start_year}-{end_year}{mode_label}")
     print(f"   Período: {start_date} a {end_date}")
     print(f"   Baixando {len(MAIN_STOCKS)} ações...")
+    if slow_mode:
+        print(f"   ⏱️  Delay: {stock_delay}s entre ações, {batch_delay}s entre batches")
 
     total_records = 0
     successful_stocks = 0
@@ -244,14 +267,15 @@ def download_batch(engine, years, batch_num, total_batches):
             print(f"✗ Sem dados")
 
         # Delay entre ações para evitar rate limiting
-        time.sleep(STOCK_DELAY_SECONDS)
+        if i < len(MAIN_STOCKS):  # Não esperar após a última ação
+            time.sleep(stock_delay)
 
     print(f"\n   ✅ Batch concluído: {total_records:,} registros de {successful_stocks} ações")
 
     return total_records, successful_stocks
 
 
-def download_all(engine):
+def download_all(engine, slow_mode=False):
     """Baixa todos os dados históricos em batches"""
     current_year = datetime.now().year
 
@@ -264,27 +288,32 @@ def download_all(engine):
         batch_years = all_years[i:i + BATCH_SIZE_YEARS]
         batches.append(batch_years)
 
+    batch_delay = SLOW_MODE_BATCH_DELAY if slow_mode else BATCH_DELAY_SECONDS
+    mode_label = " (MODO SLOW 🐌)" if slow_mode else ""
+
     print(f"\n{'='*60}")
-    print(f"📥 DOWNLOAD COMPLETO VIA YAHOO FINANCE")
+    print(f"📥 DOWNLOAD COMPLETO VIA YAHOO FINANCE{mode_label}")
     print(f"{'='*60}")
     print(f"\n   📅 Período: {HISTORICAL_START_YEAR} até {current_year}")
     print(f"   📦 Total de batches: {len(batches)}")
     print(f"   📈 Ações: {len(MAIN_STOCKS)}")
-    print(f"   ⏱️  Delay entre batches: {BATCH_DELAY_SECONDS}s")
+    print(f"   ⏱️  Delay entre batches: {batch_delay}s")
+    if slow_mode:
+        print(f"   🐌 Modo SLOW ativo para evitar rate limiting")
     print(f"\n{'='*60}\n")
 
     total_records_all = 0
     total_stocks_all = 0
 
     for i, batch_years in enumerate(batches, 1):
-        records, stocks = download_batch(engine, batch_years, i, len(batches))
+        records, stocks = download_batch(engine, batch_years, i, len(batches), slow_mode)
         total_records_all += records
         total_stocks_all += stocks
 
         # Delay entre batches (exceto no último)
         if i < len(batches):
-            print(f"\n   ⏳ Aguardando {BATCH_DELAY_SECONDS}s antes do próximo batch...")
-            time.sleep(BATCH_DELAY_SECONDS)
+            print(f"\n   ⏳ Aguardando {batch_delay}s antes do próximo batch...")
+            time.sleep(batch_delay)
 
     print(f"\n{'='*60}")
     print(f"✅ DOWNLOAD COMPLETO!")
@@ -413,16 +442,30 @@ def main():
         print("\n🔥 BROKER - Download Standalone via Yahoo Finance")
         print("\n⚡ Este script NÃO precisa do backend rodando!")
         print("\nUso:")
-        print("  python scripts/download_data_standalone.py stats     # Ver estatísticas")
-        print("  python scripts/download_data_standalone.py test      # TESTAR com 5 ações (6 meses)")
-        print("  python scripts/download_data_standalone.py all       # Baixar tudo (2000-2026)")
-        print("  python scripts/download_data_standalone.py year 2023 # Baixar ano específico")
-        print("  python scripts/download_data_standalone.py daily     # Atualizar últimos 7 dias")
-        print("\n💡 Dica: Execute 'test' primeiro para verificar se está funcionando!")
+        print("  python scripts/download_data_standalone.py stats          # Ver estatísticas")
+        print("  python scripts/download_data_standalone.py test           # TESTAR com 5 ações (6 meses)")
+        print("  python scripts/download_data_standalone.py all            # Baixar tudo (2000-2026)")
+        print("  python scripts/download_data_standalone.py all --slow     # Modo SLOW (delays maiores)")
+        print("  python scripts/download_data_standalone.py wait [minutos] # Aguardar rate limit expirar")
+        print("  python scripts/download_data_standalone.py year 2023      # Baixar ano específico")
+        print("  python scripts/download_data_standalone.py daily          # Atualizar últimos 7 dias")
+        print("\n💡 Dicas:")
+        print("   - Execute 'test' primeiro para verificar se está funcionando!")
+        print("   - Use 'wait 15' se receber erro 429 (Too Many Requests)")
+        print("   - Use '--slow' para evitar rate limiting agressivo")
         print()
         sys.exit(1)
 
     command = sys.argv[1]
+
+    # Verificar se é comando wait
+    if command == "wait":
+        minutes = int(sys.argv[2]) if len(sys.argv) > 2 else 15
+        wait_for_rate_limit_reset(minutes)
+        return
+
+    # Verificar modo slow
+    slow_mode = "--slow" in sys.argv
 
     # Setup database
     print("\n🔧 Configurando banco de dados...")
@@ -439,7 +482,7 @@ def main():
     elif command == "all":
         stats = get_stats(engine)
         print_stats(stats)
-        download_all(engine)
+        download_all(engine, slow_mode)
         stats = get_stats(engine)
         print_stats(stats)
 
