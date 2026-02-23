@@ -16,7 +16,7 @@ import logging
 import httpx
 
 from ..services.ibovespa_service import ibovespa_service
-from ..services.yahoo_finance_service import yahoo_finance_service
+from ..services.investing_service import investing_service
 
 router = APIRouter(prefix="/ibovespa", tags=["ibovespa"])
 logger = logging.getLogger(__name__)
@@ -143,16 +143,16 @@ async def get_ibovespa_info() -> Dict[str, Any]:
         }
 
 
-@router.post("/download/yahoo")
-async def download_from_yahoo(
+@router.post("/download/investing")
+async def download_from_investing(
     days: int = 365,
     force_full: bool = False
 ) -> Dict[str, Any]:
     """
-    Download Ibovespa data from Yahoo Finance (RECOMMENDED - FONTE ÚNICA)
+    Download Ibovespa data from Investing.com - FONTE ÚNICA DE DADOS
 
     Este é o método principal para buscar dados históricos do Ibovespa.
-    Yahoo Finance: confiável, estável, sem bloqueios.
+    Investing.com: Dados diretos da fonte brasileira com rate limiting.
 
     Args:
         days: Número de dias de histórico (padrão: 365)
@@ -163,10 +163,10 @@ async def download_from_yahoo(
         Failure: Error message with alternatives
 
     Examples:
-        POST /api/ibovespa/download/yahoo?days=730  # Últimos 2 anos
-        POST /api/ibovespa/download/yahoo?force_full=true  # Desde 1994
+        POST /api/ibovespa/download/investing?days=730  # Últimos 2 anos
+        POST /api/ibovespa/download/investing?force_full=true  # Desde 1994
     """
-    logger.info(f"🔄 Downloading Ibovespa data from Yahoo Finance ({days} days)...")
+    logger.info(f"🔄 Downloading Ibovespa data from Investing.com ({days} days)...")
 
     try:
         # Calculate date range
@@ -180,8 +180,8 @@ async def download_from_yahoo(
             start_date = end_date - timedelta(days=days)
             logger.info(f"📥 Downloading last {days} days...")
 
-        # Fetch data from Yahoo Finance
-        records = await yahoo_finance_service.fetch_ibovespa_historical(
+        # Fetch data from Investing.com
+        records = await investing_service.fetch_ibovespa_historical(
             start_date=start_date,
             end_date=end_date
         )
@@ -189,17 +189,18 @@ async def download_from_yahoo(
         if not records:
             raise HTTPException(
                 status_code=404,
-                detail="No data returned from Yahoo Finance"
+                detail="No data returned from Investing.com"
             )
 
-        logger.info(f"✅ Fetched {len(records)} records from Yahoo Finance")
+        logger.info(f"✅ Fetched {len(records)} records from Investing.com")
 
         # Update database
         inserted = await ibovespa_service.update_database(records)
 
         return {
             "status": "success",
-            "source": "yahoo_finance",
+            "source": "investing_com",
+            "method": "investiny + rate limiting",
             "records_fetched": len(records),
             "records_inserted": inserted,
             "records_skipped": len(records) - inserted,
@@ -211,12 +212,12 @@ async def download_from_yahoo(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Error downloading from Yahoo Finance: {e}")
+        logger.error(f"❌ Error downloading from Investing.com: {e}")
         raise HTTPException(
             status_code=500,
             detail={
-                "error": "yahoo_finance_download_failed",
-                "message": f"Failed to download from Yahoo Finance: {str(e)}",
+                "error": "investing_download_failed",
+                "message": f"Failed to download from Investing.com: {str(e)}",
                 "alternatives": [
                     {
                         "method": "manual_upload",
@@ -228,35 +229,30 @@ async def download_from_yahoo(
         )
 
 
-@router.get("/test/yahoo")
-async def test_yahoo_connection() -> Dict[str, Any]:
+@router.get("/test/investing")
+async def test_investing_connection() -> Dict[str, Any]:
     """
-    Test connection to Yahoo Finance
+    Test connection to Investing.com
 
     Returns:
         Connection status
     """
-    result = await yahoo_finance_service.test_connection()
+    result = await investing_service.test_connection()
     return {
         "status": "tested",
-        "source": "yahoo_finance",
+        "source": "investing_com",
         **result
     }
 
 
-@router.get("/debug/yahoo")
-async def debug_yahoo_finance() -> Dict[str, Any]:
+@router.get("/debug/investing")
+async def debug_investing() -> Dict[str, Any]:
     """
-    Debug endpoint to test Yahoo Finance direct HTTP API with different symbols
+    Debug endpoint to test Investing.com with different symbols
 
     Tests multiple symbols to verify connectivity and data availability
     """
-    symbols_to_test = [
-        "^BVSP",      # Ibovespa index
-        "PETR4.SA",   # Petrobras
-        "VALE3.SA",   # Vale
-        "ITUB4.SA",   # Itaú Unibanco
-    ]
+    symbols_to_test = ['VALE3', 'PETR4', 'ITUB4', 'BBAS3']
 
     results = []
     for symbol in symbols_to_test:
@@ -264,21 +260,16 @@ async def debug_yahoo_finance() -> Dict[str, Any]:
             end_date = datetime.now()
             start_date = end_date - timedelta(days=30)
 
-            records = await yahoo_finance_service._fetch_chart_data(
-                symbol=symbol,
-                start_date=start_date,
-                end_date=end_date,
-                interval="1d"
-            )
+            result = await investing_service.fetch_single_stock(symbol, days=30)
 
-            if records:
-                latest = records[-1]
+            if result and result.get('prices'):
+                latest = result['prices'][-1]
                 results.append({
                     "symbol": symbol,
                     "success": True,
-                    "records_count": len(records),
-                    "first_date": str(records[0]['date']),
-                    "last_date": str(latest['date']),
+                    "records_count": len(result['prices']),
+                    "first_date": result['prices'][0]['date'],
+                    "last_date": latest['date'],
                     "latest_close": latest['close']
                 })
             else:
@@ -301,25 +292,25 @@ async def debug_yahoo_finance() -> Dict[str, Any]:
 
     return {
         "status": "debug_complete",
-        "method": "direct_http_api",
+        "method": "investiny + batching",
         "total_tested": len(symbols_to_test),
         "successful_count": len(successful),
         "tests": results,
-        "recommendation": f"Use symbol: {successful[0]['symbol']}" if successful else "No symbols returned data - check network connectivity to query1.finance.yahoo.com"
+        "recommendation": f"Use symbol: {successful[0]['symbol']}" if successful else "No symbols returned data - check network connectivity to Investing.com"
     }
 
 
 @router.post("/download/auto")
 async def download_auto_redirect() -> Dict[str, Any]:
     """
-    DEPRECATED: This endpoint redirects to Yahoo Finance
-    
-    Yahoo Finance is the ONLY automated data source.
-    Use /download/yahoo for automatic downloads.
+    DEPRECATED: This endpoint redirects to Investing.com
+
+    Investing.com is the ONLY automated data source.
+    Use /download/investing for automatic downloads.
     """
     raise HTTPException(
         status_code=301,
-        detail="Use /api/ibovespa/download/yahoo instead"
+        detail="Use /api/ibovespa/download/investing instead"
     )
 
 

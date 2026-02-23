@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 from ..database import get_db
@@ -17,7 +17,7 @@ from ..schemas import (
     PriceHistoryResponse,
     StockPriceResponse
 )
-from ..services.yahoo_finance_service import yahoo_finance_service
+from ..services.investing_service import investing_service
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 logger = logging.getLogger(__name__)
@@ -173,42 +173,55 @@ async def get_latest_price(
     return StockPriceResponse.model_validate(price)
 
 
-@router.post("/download/yahoo")
-async def download_stocks_from_yahoo(
+@router.post("/download/investing")
+async def download_stocks_from_investing(
     days: int = Query(365, description="Days of historical data"),
-    dataset: str = Query("all", description="Dataset: 'popular' (15), 'ibovespa' (~85), or 'all' (~170)"),
+    symbols: Optional[str] = Query(None, description="Comma-separated symbols (e.g., 'PETR4,VALE3')"),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    Download Brazilian stocks from Yahoo Finance
+    Download Brazilian stocks from Investing.com - FONTE ÚNICA DE DADOS
 
     Downloads data for stocks and saves to database with price history.
+    Uses batching system with rate limiting (12 req/min) to avoid connection issues.
 
     Args:
         days: Number of days of historical data (default: 365)
-        dataset: Which dataset to download:
-            - 'popular': 15 most popular stocks
-            - 'ibovespa': ~85 Ibovespa index stocks
-            - 'all': ~170 B3 stocks (all major liquid stocks)
+        symbols: Comma-separated list of stock symbols to download.
+                 If not provided, downloads all available stocks with Investing IDs.
+
+    Examples:
+        POST /api/stocks/download/investing?days=730
+        POST /api/stocks/download/investing?symbols=PETR4,VALE3,ITUB4&days=1825
     """
-    logger.info(f"📥 Downloading {dataset} stocks from Yahoo Finance ({days} days)...")
+    logger.info(f"📥 Downloading stocks from Investing.com ({days} days)...")
 
     try:
-        # Fetch stock data from Yahoo Finance based on dataset
-        if dataset == "popular":
-            stock_data = await yahoo_finance_service.get_popular_stocks(days=days)
-        elif dataset == "ibovespa":
-            stock_data = await yahoo_finance_service.get_ibovespa_stocks(days=days)
-        elif dataset == "all":
-            stock_data = await yahoo_finance_service.get_all_b3_stocks(days=days)
+        # Determine which symbols to fetch
+        if symbols:
+            # User provided specific symbols
+            symbols_list = [s.strip().upper() for s in symbols.split(',')]
         else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid dataset '{dataset}'. Use 'popular', 'ibovespa', or 'all'"
-            )
+            # Download all available stocks from Investing IDs
+            symbols_list = list(investing_service.INVESTING_IDS.keys())
+            # Remove Ibovespa index from stock downloads
+            if '^BVSP' in symbols_list:
+                symbols_list.remove('^BVSP')
+
+        logger.info(f"   Símbolos selecionados: {len(symbols_list)}")
+
+        # Fetch stock data from Investing.com
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+
+        stock_data = await investing_service.fetch_stock_data(
+            symbols=symbols_list,
+            start_date=start_date,
+            end_date=end_date
+        )
 
         if not stock_data:
-            raise HTTPException(status_code=404, detail="No stock data returned from Yahoo Finance")
+            raise HTTPException(status_code=404, detail="No stock data returned from Investing.com")
 
         total_prices = 0
         stocks_updated = 0
@@ -270,10 +283,12 @@ async def download_stocks_from_yahoo(
 
         return {
             "status": "success",
-            "source": "yahoo_finance",
-            "dataset": dataset,
+            "source": "investing_com",
+            "method": "investiny + batching",
+            "symbols_requested": len(symbols_list),
             "stocks_downloaded": stocks_updated,
             "price_records_inserted": total_prices,
+            "days": days,
             "symbols": list(stock_data.keys())
         }
 
