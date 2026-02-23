@@ -1,15 +1,15 @@
 """
-Auto-update service for stock data - INVESTING.COM ONLY
+Auto-update service for stock data - YAHOO FINANCE
 
-This service automatically downloads and updates stock data from Investing.com
+This service automatically downloads and updates stock data from Yahoo Finance
 on a scheduled basis (daily by default).
 
-⚠️ FONTE ÚNICA: Investing.com - Com batching e rate limiting
+✅ FONTE: Yahoo Finance - API oficial, grátis e confiável
 
 📅 HISTÓRICO COMPLETO:
 - Download desde 1994 (início do Real - R$)
-- Batches de 8 ações com rate limiting (12 req/min)
-- Retry com exponential backoff
+- Dados via httpx direto à API do Yahoo Finance
+- Retry automático com backoff
 - Sincronização inteligente com verificação de gaps
 """
 
@@ -22,7 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import Stock, StockPrice
 from ..database import AsyncSessionLocal
-from .investing_service import investing_service
+from .yahoo_finance_service import yahoo_finance_service
+from ..config.b3_stocks import ALL_B3_STOCKS
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -191,7 +192,7 @@ class AutoUpdateService:
         Returns:
             Statistics about the update
         """
-        logger.info(f"📥 Downloading data from Investing.com for years {start_year}-{end_year}")
+        logger.info(f"📥 Downloading data from Yahoo Finance for years {start_year}-{end_year}")
 
         # Calculate date range
         start_date = datetime(start_year, 1, 1)
@@ -203,11 +204,11 @@ class AutoUpdateService:
             end_date = now
             logger.info(f"   Adjusted end date to today: {end_date.strftime('%Y-%m-%d')}")
 
-        # Get available symbols from Investing IDs (excluding Ibovespa)
-        symbols = [s for s in investing_service.INVESTING_IDS.keys() if s != '^BVSP']
+        # Use all B3 stocks
+        symbols = ALL_B3_STOCKS
 
-        # Download from Investing.com
-        stock_records = await investing_service.fetch_stock_data(
+        # Download from Yahoo Finance
+        stock_records = await yahoo_finance_service.fetch_stock_data(
             symbols=symbols,
             start_date=start_date,
             end_date=end_date
@@ -309,12 +310,12 @@ class AutoUpdateService:
         self.status.start_run()
 
         try:
-            # Investing.com is the single data source
-            logger.info("📊 Using Investing.com as single data source")
+            # Yahoo Finance is the data source
+            logger.info("📊 Using Yahoo Finance as data source")
             ibov_result = {
-                'status': 'investing_com',
+                'status': 'yahoo_finance',
                 'symbol': 'IBOV',
-                'message': 'Data from Investing.com with batching + rate limiting'
+                'message': 'Data from Yahoo Finance API (official, free, reliable)'
             }
 
             async with AsyncSessionLocal() as db:
