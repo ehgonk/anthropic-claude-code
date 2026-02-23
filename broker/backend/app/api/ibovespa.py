@@ -2,7 +2,7 @@
 Ibovespa Data Management API
 
 Endpoints for managing Ibovespa historical data:
-- Automatic download from Yahoo Finance (FONTE ÚNICA)
+- Automatic download from Investing.com (FONTE ÚNICA)
 - Manual upload (CSV file as fallback)
 - Data information and statistics
 """
@@ -31,7 +31,7 @@ async def upload_ibovespa_csv(file: UploadFile = File(...)) -> Dict[str, Any]:
     Data,Abertura,Máxima,Mínima,Fechamento,Volume
     01/07/1994,100.00,105.00,98.00,103.50,1000000
 
-    Note: Primary data source is Yahoo Finance via /download/yahoo endpoint.
+    Note: Primary data source is Investing.com via /download/investing endpoint.
     This upload is only for manual fallback scenarios.
     """
     if not file.filename.endswith('.csv'):

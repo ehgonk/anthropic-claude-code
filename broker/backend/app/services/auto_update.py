@@ -284,7 +284,7 @@ class AutoUpdateService:
 
     async def update_year(self, db: AsyncSession, year: int) -> Dict[str, Any]:
         """
-        Update data for a specific year using Yahoo Finance
+        Update data for a specific year using Investing.com
 
         Returns statistics about the update
         """

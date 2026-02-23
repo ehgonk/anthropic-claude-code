@@ -5,7 +5,6 @@ from datetime import datetime
 from typing import Optional
 from ..database import get_db
 from ..models import Stock, StockPrice
-from ..services.b3_cotahist import b3_service
 from ..services.auto_update import auto_update_service
 from ..seed import TARGET_STOCKS
 
@@ -81,7 +80,7 @@ async def run_update(
     background_tasks: BackgroundTasks = None
 ):
     """
-    Trigger data update from Yahoo Finance
+    Trigger data update from Investing.com
 
     Args:
         force: Re-download existing data
@@ -143,6 +142,6 @@ async def get_data_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
-# B3 COTAHIST endpoints disabled - Yahoo Finance is the single data source
+# B3 COTAHIST endpoints disabled - Investing.com is the single data source
 # @router.post("/ingest/b3/range")
 # @router.post("/ingest/b3/{year}")
