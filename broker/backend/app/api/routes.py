@@ -137,8 +137,8 @@ async def get_data_stats(db: AsyncSession = Depends(get_db)):
         "total_records": total_records,
         "total_stocks": total_stocks,
         "years": year_stats,
-        "expected_start_year": 1994,
-        "coverage_complete": first_date and first_date.startswith("1994") if first_date else False
+        "expected_start_year": 2000,
+        "coverage_complete": first_date and first_date.startswith("2000") if first_date else False
     }
 
 
