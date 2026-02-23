@@ -51,7 +51,7 @@ function App() {
   const [isDark, setIsDark] = useState(false)
   const [stocks, setStocks] = useState<Stock[]>([])
   const [loading, setLoading] = useState(true)
-  const [lastB3Date, setLastB3Date] = useState<string | null>(null)
+  const [lastUpdateDate, setLastB3Date] = useState<string | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
   const [updateMessage, setUpdateMessage] = useState<string | null>(null)
   const [layout, setLayout] = useState<GridLayout>(LAYOUTS[0]) // 1x1 default
@@ -85,7 +85,7 @@ function App() {
       try {
         console.log('📊 Loading data...')
         setIsUpdating(true)
-        setUpdateMessage('Carregando dados da B3...')
+        setUpdateMessage('Carregando dados do mercado...')
 
         // Fetch stocks
         const stocksData = await api.getStocks()
@@ -224,7 +224,7 @@ function App() {
     <div className="flex flex-col h-screen bg-dark-bg">
       <TopBar
         selectedStock={panels[activePanel].stock}
-        lastB3Date={lastB3Date}
+        lastUpdateDate={lastUpdateDate}
         isUpdating={isUpdating}
         updateMessage={updateMessage}
         themeMode={themeMode}

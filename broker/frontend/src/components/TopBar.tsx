@@ -4,14 +4,14 @@ import ThemeSwitcher, { ThemeMode } from './ThemeSwitcher'
 
 interface TopBarProps {
   selectedStock: Stock | null
-  lastB3Date: string | null
+  lastUpdateDate: string | null
   isUpdating: boolean
   updateMessage: string | null
   themeMode: ThemeMode
   onThemeChange: (theme: ThemeMode) => void
 }
 
-export default function TopBar({ selectedStock, lastB3Date, isUpdating, updateMessage, themeMode, onThemeChange }: TopBarProps) {
+export default function TopBar({ selectedStock, lastUpdateDate, isUpdating, updateMessage, themeMode, onThemeChange }: TopBarProps) {
   return (
     <div className="h-12 bg-dark-card border-b border-dark-border flex items-center justify-between px-4">
       <div className="flex items-center gap-4">
@@ -55,12 +55,12 @@ export default function TopBar({ selectedStock, lastB3Date, isUpdating, updateMe
           </div>
         )}
 
-        {/* Last B3 update date (already formatted as dd/mm/yyyy from backend) */}
+        {/* Last update date (already formatted as dd/mm/yyyy from backend) */}
         <div className="flex items-center gap-2 px-3 py-1 bg-dark-bg rounded border border-dark-border">
           <Database className="w-3.5 h-3.5 text-dark-muted" />
           <span className="text-dark-muted text-xs">Última atualização:</span>
           <span className="text-dark-text text-xs font-medium">
-            {lastB3Date || '--/--/----'}
+            {lastUpdateDate || '--/--/----'}
           </span>
         </div>
 

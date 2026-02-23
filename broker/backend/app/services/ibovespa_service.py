@@ -2,10 +2,9 @@
 Ibovespa Historical Data Service
 
 Service to manage Ibovespa historical data in the database.
-Source: Manual upload from B3 CSV files
+Source: Yahoo Finance API or manual CSV upload
 
-Note: B3 has captcha protection preventing automatic downloads.
-This service handles database operations for manually uploaded Ibovespa data.
+This service handles database operations for Ibovespa data.
 
 Data is stored in the same database as individual stocks, using symbol 'IBOV'.
 Criteria: Data from 1994 onwards (Real currency period).
@@ -24,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class IbovespaService:
-    """Service for managing Ibovespa historical data from B3 (manual upload)"""
+    """Service for managing Ibovespa historical data (Yahoo Finance or manual upload)"""
 
     SYMBOL = "IBOV"
     NAME = "Índice Bovespa"
@@ -70,8 +69,7 @@ class IbovespaService:
                 return datetime.strptime(last_date, "%Y-%m-%d").date()
             return last_date
 
-    # download_historical_data removed - now using manual upload only
-    # B3 has captcha protection preventing automatic downloads
+    # download_historical_data via Yahoo Finance - see ibovespa.py endpoint
 
     async def update_database(self, records: List[Dict]) -> int:
         """
@@ -150,7 +148,7 @@ class IbovespaService:
         result = {
             'status': 'manual_only',
             'symbol': self.SYMBOL,
-            'message': 'Ibovespa requires manual upload from B3',
+            'message': 'Use Yahoo Finance endpoint or manual CSV upload',
             'last_date': str(last_date) if last_date else None,
             'upload_endpoint': '/api/ibovespa/upload/csv'
         }

@@ -1,5 +1,5 @@
 """
-Lista de ações negociadas na B3 (Bolsa de Valores do Brasil)
+Lista de ações negociadas na bolsa de valores do Brasil
 
 Esta lista inclui as principais ações por liquidez e volume.
 Para baixar dados históricos do Yahoo Finance, adicione sufixo .SA
@@ -145,8 +145,8 @@ IBOVESPA_STOCKS = [
     "BRML3",           # BR Malls
 ]
 
-# Ações adicionais negociadas na B3 (fora do Ibovespa mas com boa liquidez)
-ADDITIONAL_B3_STOCKS = [
+# Ações adicionais (fora do Ibovespa mas com boa liquidez)
+ADDITIONAL_STOCKS = [
     # Small Caps com liquidez
     "POMO4",           # Marcopolo
     "KEPL3",           # Kepler Weber
@@ -208,9 +208,4 @@ ADDITIONAL_B3_STOCKS = [
 ]
 
 # Lista completa combinada
-ALL_B3_STOCKS = sorted(set(IBOVESPA_STOCKS + ADDITIONAL_B3_STOCKS))
-
-# Total de ações
-print(f"Total de ações configuradas: {len(ALL_B3_STOCKS)}")
-print(f"- Ibovespa: {len(IBOVESPA_STOCKS)}")
-print(f"- Adicionais: {len(ADDITIONAL_B3_STOCKS)}")
+ALL_STOCKS = sorted(set(IBOVESPA_STOCKS + ADDITIONAL_STOCKS))

@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api")
 
 @router.get("/last-update")
 async def get_last_update(db: AsyncSession = Depends(get_db)):
-    """Get the date of the last downloaded B3 quote"""
+    """Get the date of the last downloaded quote"""
     result = await db.execute(
         select(func.max(StockPrice.date))
     )
@@ -154,6 +154,3 @@ async def get_data_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
-# B3 COTAHIST endpoints disabled - Investing.com is the single data source
-# @router.post("/ingest/b3/range")
-# @router.post("/ingest/b3/{year}")

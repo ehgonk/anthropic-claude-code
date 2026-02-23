@@ -8,7 +8,7 @@ PROJECT_DATA_DIR.mkdir(exist_ok=True)
 
 
 class Settings(BaseSettings):
-    app_name: str = "Broker - B3 Stock Market API"
+    app_name: str = "Broker - Bolsa de Valores API"
     data_dir: Path = PROJECT_DATA_DIR
     database_url: str = f"sqlite+aiosqlite:///{PROJECT_DATA_DIR}/broker.db"
 
@@ -19,7 +19,7 @@ class Settings(BaseSettings):
         "http://localhost:3000",
     ]
 
-    # B3 Data Sources
+    # Data Sources
     brapi_base_url: str = "https://brapi.dev/api"
 
     class Config:

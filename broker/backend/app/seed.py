@@ -16,7 +16,7 @@ from .models import Stock, StockPrice
 from .services.yahoo_finance_service import yahoo_finance_service
 
 
-# Top B3 stocks by market cap and liquidity
+# Top stocks by market cap and liquidity
 TARGET_STOCKS = [
     "PETR4",  # Petrobras PN
     "VALE3",  # Vale ON

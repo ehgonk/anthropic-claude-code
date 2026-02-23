@@ -101,7 +101,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 @app.get("/api")
 async def root():
-    return {"message": "Broker API - B3 Stock Market"}
+    return {"message": "Broker API - Bolsa de Valores"}
 
 
 # Mount static files (frontend build)

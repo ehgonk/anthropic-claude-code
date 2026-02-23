@@ -8,14 +8,6 @@ export interface LastUpdateInfo {
   total_records: number
 }
 
-export interface IngestResult {
-  status: string
-  year: number
-  stocks_processed: number
-  price_records: number
-  symbols: string[]
-}
-
 export interface DataStats {
   first_date: string | null
   last_date: string | null
@@ -81,16 +73,6 @@ const api = {
 
   async getLastUpdate(): Promise<LastUpdateInfo> {
     const response = await fetch(`${API_URL}/last-update`, {
-      headers: { 'Accept': 'application/json' },
-      cache: 'no-cache'
-    })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    return await response.json()
-  },
-
-  async ingestB3(year: number): Promise<IngestResult> {
-    const response = await fetch(`${API_URL}/ingest/b3/${year}`, {
-      method: 'POST',
       headers: { 'Accept': 'application/json' },
       cache: 'no-cache'
     })

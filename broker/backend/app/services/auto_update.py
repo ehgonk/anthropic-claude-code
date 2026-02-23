@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import Stock, StockPrice
 from ..database import AsyncSessionLocal
 from .yahoo_finance_service import yahoo_finance_service
-from ..config.b3_stocks import ALL_B3_STOCKS
+from ..config.b3_stocks import ALL_STOCKS
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -204,8 +204,8 @@ class AutoUpdateService:
             end_date = now
             logger.info(f"   Adjusted end date to today: {end_date.strftime('%Y-%m-%d')}")
 
-        # Use all B3 stocks
-        symbols = ALL_B3_STOCKS
+        # Use all exchange stocks
+        symbols = ALL_STOCKS
 
         # Download from Yahoo Finance
         stock_records = await yahoo_finance_service.fetch_stock_data(

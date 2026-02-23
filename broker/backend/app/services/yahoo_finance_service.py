@@ -25,12 +25,12 @@ from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
-# Import B3 stocks list
+# Import stocks list
 try:
-    from ..config.b3_stocks import ALL_B3_STOCKS, IBOVESPA_STOCKS
+    from ..config.b3_stocks import ALL_STOCKS, IBOVESPA_STOCKS
 except ImportError:
     # Fallback if config not available
-    ALL_B3_STOCKS = []
+    ALL_STOCKS = []
     IBOVESPA_STOCKS = []
 
 # Yahoo Finance API base URL
@@ -396,9 +396,9 @@ class YahooFinanceService:
 
         return await self.fetch_stock_data(self.POPULAR_STOCKS, start_date, end_date)
 
-    async def get_all_b3_stocks(self, days: int = 365) -> Dict[str, Dict]:
+    async def get_all_stocks(self, days: int = 365) -> Dict[str, Dict]:
         """
-        Fetch data for ALL B3 stocks (~170 stocks)
+        Fetch data for ALL exchange stocks (~153 stocks)
 
         Args:
             days: Number of days of historical data
@@ -406,16 +406,16 @@ class YahooFinanceService:
         Returns:
             Dictionary with stock data
         """
-        if not ALL_B3_STOCKS:
-            logger.warning("ALL_B3_STOCKS not available, falling back to POPULAR_STOCKS")
+        if not ALL_STOCKS:
+            logger.warning("ALL_STOCKS not available, falling back to POPULAR_STOCKS")
             return await self.get_popular_stocks(days)
 
-        logger.info(f"📊 Fetching {len(ALL_B3_STOCKS)} B3 stocks...")
+        logger.info(f"📊 Fetching {len(ALL_STOCKS)} exchange stocks...")
 
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
 
-        return await self.fetch_stock_data(ALL_B3_STOCKS, start_date, end_date)
+        return await self.fetch_stock_data(ALL_STOCKS, start_date, end_date)
 
     async def get_ibovespa_stocks(self, days: int = 365) -> Dict[str, Dict]:
         """

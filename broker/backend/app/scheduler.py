@@ -1,7 +1,7 @@
 """
 APScheduler integration for automatic updates
 
-Schedules daily stock data updates from B3.
+Schedules daily stock data updates from Yahoo Finance.
 """
 
 import asyncio
@@ -48,7 +48,7 @@ class UpdateScheduler:
             self._run_scheduled_update,
             trigger=CronTrigger(hour=hour, minute=minute),
             id="daily_stock_update",
-            name="Daily B3 Stock Update",
+            name="Daily Stock Update",
             replace_existing=True
         )
 
