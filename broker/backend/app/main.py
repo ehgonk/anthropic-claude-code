@@ -28,14 +28,14 @@ async def lifespan(app: FastAPI):
     # Startup
     await init_db()
 
-    # Run auto-update on startup (incremental update)
-    logger.info("Running auto-update on startup...")
-    try:
-        update_service = AutoUpdateService()
-        result = await update_service.run_update(force=False)
-        logger.info(f"Startup update completed: {result}")
-    except Exception as e:
-        logger.error(f"Startup update failed: {e}")
+    # Auto-update disabled on startup (requires external network access)
+    # logger.info("Running auto-update on startup...")
+    # try:
+    #     update_service = AutoUpdateService()
+    #     result = await update_service.run_update(force=False)
+    #     logger.info(f"Startup update completed: {result}")
+    # except Exception as e:
+    #     logger.error(f"Startup update failed: {e}")
 
     yield
 
