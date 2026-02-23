@@ -39,32 +39,44 @@ async def get_last_update(db: AsyncSession = Depends(get_db)):
 @router.get("/stocks/{symbol}/candles")
 async def get_candle_data(symbol: str, db: AsyncSession = Depends(get_db)):
     """Get candlestick data for a symbol"""
-    # Get stock
-    result = await db.execute(select(Stock).where(Stock.symbol == symbol))
-    stock = result.scalar_one_or_none()
+    import logging
+    logger = logging.getLogger(__name__)
 
-    if not stock:
-        return []
+    try:
+        logger.info(f"📊 Requesting candles for {symbol}")
 
-    # Get prices ordered by date
-    result = await db.execute(
-        select(StockPrice)
-        .where(StockPrice.stock_id == stock.id)
-        .order_by(StockPrice.date)
-    )
-    prices = result.scalars().all()
+        # Get stock
+        result = await db.execute(select(Stock).where(Stock.symbol == symbol))
+        stock = result.scalar_one_or_none()
 
-    return [
-        {
-            "time": price.date,
-            "open": price.open,
-            "high": price.high,
-            "low": price.low,
-            "close": price.close,
-            "volume": price.volume,
-        }
-        for price in prices
-    ]
+        if not stock:
+            logger.info(f"⚠️  Stock {symbol} not found, returning empty array")
+            return []
+
+        # Get prices ordered by date
+        result = await db.execute(
+            select(StockPrice)
+            .where(StockPrice.stock_id == stock.id)
+            .order_by(StockPrice.date)
+        )
+        prices = result.scalars().all()
+
+        logger.info(f"✅ Returning {len(prices)} candles for {symbol}")
+
+        return [
+            {
+                "time": price.date,
+                "open": price.open,
+                "high": price.high,
+                "low": price.low,
+                "close": price.close,
+                "volume": price.volume,
+            }
+            for price in prices
+        ]
+    except Exception as e:
+        logger.error(f"❌ Error getting candles for {symbol}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error getting candles: {str(e)}")
 
 
 @router.get("/health")
