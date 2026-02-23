@@ -77,25 +77,86 @@ class InvestingService:
     # Data mínima: 1994-07-01 (início do Real)
     MIN_DATE = date(1994, 7, 1)
 
-    # URLs dos ativos brasileiros no Investing.com
+    # URLs dos ativos brasileiros no Investing.com - TOP 50 AÇÕES B3 2026
     INVESTING_URLS = {
+        # === ÍNDICE ===
         '^BVSP': 'https://www.investing.com/indices/bovespa-historical-data',
-        'PETR4': 'https://www.investing.com/equities/petrobras-historical-data',
-        'VALE3': 'https://www.investing.com/equities/vale-on-nm-historical-data',
+
+        # === BANCOS (Top 5) ===
         'ITUB4': 'https://www.investing.com/equities/itau-unibanco-pn-historical-data',
         'BBDC4': 'https://www.investing.com/equities/bradesco-pn-historical-data',
-        'ABEV3': 'https://www.investing.com/equities/ambev-on-nm-historical-data',
-        'B3SA3': 'https://www.investing.com/equities/b3-on-nm-historical-data',
         'BBAS3': 'https://www.investing.com/equities/bb-seguridade-on-nm-historical-data',
-        'RENT3': 'https://www.investing.com/equities/localiza-rent-a-car-on-nm-historical-data',
-        'MGLU3': 'https://www.investing.com/equities/magazine-luiza-on-nm-historical-data',
-        'WEGE3': 'https://www.investing.com/equities/weg-on-nm-historical-data',
-        'SUZB3': 'https://www.investing.com/equities/suzano-on-nm-historical-data',
-        'RAIL3': 'https://www.investing.com/equities/rumo-on-nm-historical-data',
-        'VIVT3': 'https://www.investing.com/equities/tef-brasil-pn-historical-data',
+        'SANB11': 'https://www.investing.com/equities/santander-br-unit-historical-data',
+        'BBSE3': 'https://www.investing.com/equities/bb-seguridade-on-nm-historical-data',
+
+        # === PETRÓLEO & GÁS (Top 3) ===
+        'PETR4': 'https://www.investing.com/equities/petrobras-historical-data',
+        'PETR3': 'https://www.investing.com/equities/petrobras-on-nm-historical-data',
+        'PRIO3': 'https://www.investing.com/equities/petrorio-on-nm-historical-data',
+
+        # === MINERAÇÃO & SIDERURGIA (Top 6) ===
+        'VALE3': 'https://www.investing.com/equities/vale-on-nm-historical-data',
         'GGBR4': 'https://www.investing.com/equities/gerdau-pn-historical-data',
-        'EMBR3': 'https://www.investing.com/equities/embraer-on-nm-historical-data',
+        'CSNA3': 'https://www.investing.com/equities/cia-sider-nac-on-nm-historical-data',
+        'USIM5': 'https://www.investing.com/equities/usiminas-pna-historical-data',
+        'GOAU4': 'https://www.investing.com/equities/gerdau-met-pn-historical-data',
+        'KLBN11': 'https://www.investing.com/equities/klabin-unit-historical-data',
+
+        # === ENERGIA ELÉTRICA (Top 8) ===
+        'ELET3': 'https://www.investing.com/equities/eletrobras-on-nm-historical-data',
+        'ELET6': 'https://www.investing.com/equities/eletrobras-pnb-historical-data',
+        'ENGI11': 'https://www.investing.com/equities/energisa-unit-historical-data',
+        'CPLE6': 'https://www.investing.com/equities/copel-pnb-historical-data',
+        'CMIG4': 'https://www.investing.com/equities/cemig-pn-historical-data',
+        'EGIE3': 'https://www.investing.com/equities/engie-brasil-on-nm-historical-data',
+        'TAEE11': 'https://www.investing.com/equities/taesa-unit-historical-data',
+        'TRPL4': 'https://www.investing.com/equities/tran-paulist-pn-historical-data',
+
+        # === VAREJO (Top 5) ===
+        'MGLU3': 'https://www.investing.com/equities/magazine-luiza-on-nm-historical-data',
+        'LREN3': 'https://www.investing.com/equities/lojas-renner-on-nm-historical-data',
+        'ARZZ3': 'https://www.investing.com/equities/arezzo-on-nm-historical-data',
+        'VVAR3': 'https://www.investing.com/equities/via-varejo-on-nm-historical-data',
+        'PCAR3': 'https://www.investing.com/equities/grupo-pao-de-acucar-on-nm-historical-data',
+
+        # === ALIMENTOS & BEBIDAS (Top 5) ===
+        'ABEV3': 'https://www.investing.com/equities/ambev-on-nm-historical-data',
+        'BRFS3': 'https://www.investing.com/equities/brf-sa-on-nm-historical-data',
+        'JBSS3': 'https://www.investing.com/equities/jbs-on-nm-historical-data',
+        'MRFG3': 'https://www.investing.com/equities/marfrig-on-nm-historical-data',
+        'BEEF3': 'https://www.investing.com/equities/minerva-on-nm-historical-data',
+
+        # === TELECOM (Top 2) ===
+        'VIVT3': 'https://www.investing.com/equities/tef-brasil-pn-historical-data',
+        'TIMS3': 'https://www.investing.com/equities/tim-participacoes-on-nm-historical-data',
+
+        # === CONSTRUÇÃO CIVIL (Top 3) ===
+        'CYRE3': 'https://www.investing.com/equities/cyrela-realt-on-nm-historical-data',
+        'MRVE3': 'https://www.investing.com/equities/mrv-engenharia-on-nm-historical-data',
+        'EZTC3': 'https://www.investing.com/equities/ez-tec-on-nm-historical-data',
+
+        # === LOGÍSTICA & TRANSPORTE (Top 4) ===
+        'RAIL3': 'https://www.investing.com/equities/rumo-on-nm-historical-data',
+        'CCRO3': 'https://www.investing.com/equities/ccr-sa-on-nm-historical-data',
+        'ECOR3': 'https://www.investing.com/equities/ecorodovias-on-nm-historical-data',
+        'AZUL4': 'https://www.investing.com/equities/azul-pn-historical-data',
+
+        # === SAÚDE (Top 3) ===
         'RADL3': 'https://www.investing.com/equities/rd-saude-on-nm-historical-data',
+        'HAPV3': 'https://www.investing.com/equities/hapvida-on-nm-historical-data',
+        'FLRY3': 'https://www.investing.com/equities/fleury-on-nm-historical-data',
+
+        # === FINANCEIRAS & SERVIÇOS (Top 4) ===
+        'B3SA3': 'https://www.investing.com/equities/b3-on-nm-historical-data',
+        'RENT3': 'https://www.investing.com/equities/localiza-rent-a-car-on-nm-historical-data',
+        'CIEL3': 'https://www.investing.com/equities/cielo-on-nm-historical-data',
+        'PAGS34': 'https://www.investing.com/equities/pagseguro-bdr-historical-data',
+
+        # === INDÚSTRIA & TECNOLOGIA (Top 4) ===
+        'WEGE3': 'https://www.investing.com/equities/weg-on-nm-historical-data',
+        'EMBR3': 'https://www.investing.com/equities/embraer-on-nm-historical-data',
+        'SUZB3': 'https://www.investing.com/equities/suzano-on-nm-historical-data',
+        'TOTS3': 'https://www.investing.com/equities/totvs-on-nm-historical-data',
     }
 
     # Alias para compatibilidade
