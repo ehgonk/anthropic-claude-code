@@ -162,7 +162,7 @@ export default function DataSyncPanel() {
                   </div>
                   <div className="text-xs text-dark-muted">
                     {stats.coverage_complete
-                      ? 'Dados desde 1994'
+                      ? 'Dados desde 2000 (26 anos)'
                       : 'Dados históricos faltando'
                     }
                   </div>
@@ -241,7 +241,7 @@ export default function DataSyncPanel() {
             ) : (
               <>
                 <span>🚀</span>
-                Download Completo (1994-2026)
+                Download Completo (2000-2026)
               </>
             )}
           </button>
@@ -252,7 +252,7 @@ export default function DataSyncPanel() {
           <p className="font-semibold text-dark-text">ℹ️ Sobre os Downloads:</p>
           <ul className="space-y-1 list-disc list-inside">
             <li><strong>Incremental:</strong> Baixa apenas anos faltantes</li>
-            <li><strong>Completo:</strong> Baixa tudo desde 1994</li>
+            <li><strong>Completo:</strong> Baixa tudo desde 2000 (26 anos)</li>
             <li>Dados em R$ (Real brasileiro)</li>
             <li>Batches de 3 anos para otimização</li>
           </ul>
