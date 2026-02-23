@@ -257,10 +257,10 @@ class InvestingService:
         self.max_retries = max_retries
         self.initial_backoff = initial_backoff
 
-        # Rate limiter global (mais conservador)
+        # Rate limiter global (ULTRA conservador)
         self.rate_limiter = RateLimiter(
-            max_requests_per_minute=6,  # Reduzido de 10 para 6
-            min_delay_seconds=10.0       # Aumentado de 6 para 10
+            max_requests_per_minute=4,  # REDUZIDO de 6 para 4
+            min_delay_seconds=15.0       # AUMENTADO de 10 para 15
         )
 
         # Headers realistas para bypass de Cloudflare
@@ -352,9 +352,9 @@ class InvestingService:
         def scrape():
             logger.info(f"🌐 Scraping {url}...")
 
-            # Adicionar delay randômico antes da requisição (3-7 segundos)
+            # Adicionar delay randômico antes da requisição (5-10 segundos)
             import random
-            pre_delay = random.uniform(3, 7)
+            pre_delay = random.uniform(5, 10)
             logger.debug(f"   Delay pré-requisição: {pre_delay:.1f}s")
             time.sleep(pre_delay)
 
