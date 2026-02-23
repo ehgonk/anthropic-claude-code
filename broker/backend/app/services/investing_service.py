@@ -1,36 +1,27 @@
 """
 Investing.com Data Service - ÚNICA FONTE DE DADOS
 
-Busca dados históricos do Investing.com para o mercado brasileiro.
+Busca dados históricos do Investing.com para o mercado brasileiro via WEB SCRAPING.
 
 FEATURES:
 - Sistema de batching inteligente (5-10 ações por batch)
-- Rate limiting (10-15 requisições/minuto)
+- Rate limiting (10-12 requisições/minuto)
 - Retry logic com exponential backoff
 - Filtro de data mínima: 1994-07-01 (início do Real)
-- Suporte a investiny + fallback web scraping
+- Web scraping com cloudscraper (bypass Cloudflare)
+- User-agent rotation para evitar bloqueios
 
-MÉTODO PRIMÁRIO: investiny library
-FALLBACK: Web scraping com cloudscraper (bypass Cloudflare)
+MÉTODO: Web scraping direto das páginas de dados históricos
 """
 
 import asyncio
 import logging
 import time
 from datetime import datetime, date, timedelta
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 from dataclasses import dataclass
-import pandas as pd
 
-# Investiny imports
-try:
-    from investiny import historical_data as investiny_historical
-    INVESTINY_AVAILABLE = True
-except ImportError:
-    INVESTINY_AVAILABLE = False
-    logging.warning("investiny not available, using fallback methods only")
-
-# Fallback: web scraping
+# Web scraping
 import cloudscraper
 from bs4 import BeautifulSoup
 
@@ -40,8 +31,8 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RateLimiter:
     """Rate limiter para Investing.com"""
-    max_requests_per_minute: int = 12  # Conservative: 12 req/min
-    min_delay_seconds: float = 5.0     # Minimum 5s between requests
+    max_requests_per_minute: int = 10  # Conservative: 10 req/min
+    min_delay_seconds: float = 6.0     # Minimum 6s between requests
 
     def __post_init__(self):
         self.request_times: List[float] = []
@@ -59,7 +50,7 @@ class RateLimiter:
             # Se já atingiu o limite, aguarda
             if len(self.request_times) >= self.max_requests_per_minute:
                 oldest = self.request_times[0]
-                wait_time = 60 - (now - oldest) + 1  # +1 safety margin
+                wait_time = 60 - (now - oldest) + 2  # +2 safety margin
                 logger.info(f"⏳ Rate limit atingido. Aguardando {wait_time:.1f}s...")
                 await asyncio.sleep(wait_time)
                 # Limpa lista após wait
@@ -86,41 +77,41 @@ class InvestingService:
     # Data mínima: 1994-07-01 (início do Real)
     MIN_DATE = date(1994, 7, 1)
 
-    # Investing IDs para ativos brasileiros principais
-    INVESTING_IDS = {
-        '^BVSP': 17920,      # Ibovespa
-        'PETR4': 18809,      # Petrobras PN
-        'VALE3': 18824,      # Vale ON
-        'ITUB4': 18776,      # Itaú Unibanco PN
-        'BBDC4': 18765,      # Bradesco PN
-        'ABEV3': 18742,      # Ambev ON
-        'B3SA3': 1095213,    # B3
-        'BBAS3': 18764,      # Banco do Brasil ON
-        'RENT3': 1095220,    # Localiza ON
-        'MGLU3': 1041137,    # Magazine Luiza ON
-        'WEGE3': 18836,      # WEG ON
-        'SUZB3': 18816,      # Suzano ON
-        'RAIL3': 1095219,    # Rumo ON
-        'VIVT3': 18833,      # Telefônica Brasil ON (Vivo)
-        'GGBR4': 18775,      # Gerdau PN
-        'EMBR3': 18770,      # Embraer ON
-        'RADL3': 18810,      # Raia Drogasil ON
+    # URLs dos ativos brasileiros no Investing.com
+    INVESTING_URLS = {
+        '^BVSP': 'https://www.investing.com/indices/bovespa-historical-data',
+        'PETR4': 'https://www.investing.com/equities/petrobras-historical-data',
+        'VALE3': 'https://www.investing.com/equities/vale-on-nm-historical-data',
+        'ITUB4': 'https://www.investing.com/equities/itau-unibanco-pn-historical-data',
+        'BBDC4': 'https://www.investing.com/equities/bradesco-pn-historical-data',
+        'ABEV3': 'https://www.investing.com/equities/ambev-on-nm-historical-data',
+        'B3SA3': 'https://www.investing.com/equities/b3-on-nm-historical-data',
+        'BBAS3': 'https://www.investing.com/equities/bb-seguridade-on-nm-historical-data',
+        'RENT3': 'https://www.investing.com/equities/localiza-rent-a-car-on-nm-historical-data',
+        'MGLU3': 'https://www.investing.com/equities/magazine-luiza-on-nm-historical-data',
+        'WEGE3': 'https://www.investing.com/equities/weg-on-nm-historical-data',
+        'SUZB3': 'https://www.investing.com/equities/suzano-on-nm-historical-data',
+        'RAIL3': 'https://www.investing.com/equities/rumo-on-nm-historical-data',
+        'VIVT3': 'https://www.investing.com/equities/tef-brasil-pn-historical-data',
+        'GGBR4': 'https://www.investing.com/equities/gerdau-pn-historical-data',
+        'EMBR3': 'https://www.investing.com/equities/embraer-on-nm-historical-data',
+        'RADL3': 'https://www.investing.com/equities/rd-saude-on-nm-historical-data',
     }
 
-    # URL do Ibovespa
-    IBOVESPA_URL = "https://www.investing.com/indices/bovespa-historical-data"
+    # Alias para compatibilidade
+    INVESTING_IDS = INVESTING_URLS
 
     def __init__(
         self,
-        batch_size: int = 8,
+        batch_size: int = 6,
         max_retries: int = 3,
-        initial_backoff: float = 2.0
+        initial_backoff: float = 3.0
     ):
         """
         Args:
-            batch_size: Número de ações por batch (padrão: 8)
+            batch_size: Número de ações por batch (padrão: 6)
             max_retries: Tentativas máximas por requisição (padrão: 3)
-            initial_backoff: Backoff inicial em segundos (padrão: 2.0)
+            initial_backoff: Backoff inicial em segundos (padrão: 3.0)
         """
         self.batch_size = batch_size
         self.max_retries = max_retries
@@ -128,11 +119,11 @@ class InvestingService:
 
         # Rate limiter global
         self.rate_limiter = RateLimiter(
-            max_requests_per_minute=12,
-            min_delay_seconds=5.0
+            max_requests_per_minute=10,
+            min_delay_seconds=6.0
         )
 
-        # Cloudscraper para fallback
+        # Cloudscraper para bypass de Cloudflare
         self.scraper = cloudscraper.create_scraper(
             browser={
                 'browser': 'chrome',
@@ -161,94 +152,6 @@ class InvestingService:
                 logger.info(f"   Aguardando {backoff:.1f}s antes de tentar novamente...")
                 await asyncio.sleep(backoff)
 
-    async def _fetch_with_investiny(
-        self,
-        investing_id: int,
-        start_date: datetime,
-        end_date: datetime
-    ) -> List[Dict]:
-        """
-        Busca dados usando investiny library
-
-        Args:
-            investing_id: ID do ativo no Investing.com
-            start_date: Data inicial
-            end_date: Data final
-
-        Returns:
-            Lista de registros OHLCV
-        """
-        if not INVESTINY_AVAILABLE:
-            raise Exception("investiny não disponível")
-
-        loop = asyncio.get_event_loop()
-
-        def fetch():
-            logger.info(f"📥 Buscando ID {investing_id} via investiny...")
-
-            # investiny format: dd/mm/yyyy
-            from_date = start_date.strftime('%d/%m/%Y')
-            to_date = end_date.strftime('%d/%m/%Y')
-
-            try:
-                # Fetch data
-                data = investiny_historical(
-                    investing_id=investing_id,
-                    from_date=from_date,
-                    to_date=to_date,
-                    interval='Daily'  # Daily data
-                )
-
-                if data is None or data.empty:
-                    raise Exception("Nenhum dado retornado")
-
-                # Convert DataFrame to records
-                records = []
-                for idx, row in data.iterrows():
-                    try:
-                        # Parse date
-                        if isinstance(idx, pd.Timestamp):
-                            record_date = idx.date()
-                        else:
-                            record_date = pd.to_datetime(idx).date()
-
-                        # Filter by MIN_DATE
-                        if record_date < self.MIN_DATE:
-                            continue
-
-                        # Extract OHLCV
-                        record = {
-                            'date': record_date,
-                            'open': float(row.get('Open', row.get('open', 0))),
-                            'high': float(row.get('High', row.get('high', 0))),
-                            'low': float(row.get('Low', row.get('low', 0))),
-                            'close': float(row.get('Close', row.get('close', 0))),
-                            'volume': int(float(row.get('Volume', row.get('volume', 0))))
-                        }
-
-                        # Skip invalid records
-                        if all(v == 0 for k, v in record.items() if k != 'date'):
-                            continue
-
-                        records.append(record)
-
-                    except (ValueError, KeyError) as e:
-                        logger.debug(f"Linha ignorada: {e}")
-                        continue
-
-                # Sort by date (oldest first)
-                records.sort(key=lambda x: x['date'])
-
-                logger.info(f"✅ {len(records)} registros parseados (ID {investing_id})")
-                return records
-
-            except Exception as e:
-                logger.error(f"❌ investiny falhou para ID {investing_id}: {e}")
-                raise
-
-        result = await loop.run_in_executor(None, fetch)
-        return result
-
     async def _fetch_with_scraping(
         self,
         url: str,
@@ -256,7 +159,7 @@ class InvestingService:
         end_date: datetime
     ) -> List[Dict]:
         """
-        Fallback: busca dados via web scraping
+        Busca dados via web scraping do Investing.com
 
         Args:
             url: URL do ativo no Investing.com
@@ -269,7 +172,7 @@ class InvestingService:
         loop = asyncio.get_event_loop()
 
         def scrape():
-            logger.info(f"🌐 Acessando {url} via scraping...")
+            logger.info(f"🌐 Scraping {url}...")
 
             response = self.scraper.get(url, timeout=self.timeout)
 
@@ -277,7 +180,7 @@ class InvestingService:
                 raise Exception(f"HTTP {response.status_code}")
 
             html = response.text
-            logger.info(f"✅ Página carregada ({len(html)} bytes)")
+            logger.debug(f"✅ Página carregada ({len(html)} bytes)")
 
             soup = BeautifulSoup(html, 'lxml')
 
@@ -290,8 +193,12 @@ class InvestingService:
             )
 
             if not table:
-                logger.warning("Tabela não encontrada via scraping")
-                raise Exception("Tabela não encontrada na página")
+                logger.warning("Tabela não encontrada, tentando estrutura alternativa...")
+                # Tentar divs
+                data_divs = soup.find_all('div', {'class': 'datatable_row'})
+                if data_divs:
+                    return self._parse_divs(data_divs, start_date, end_date)
+                raise Exception("Dados históricos não encontrados na página")
 
             logger.info("📊 Tabela encontrada, parseando...")
 
@@ -316,7 +223,7 @@ class InvestingService:
                     if date_obj < self.MIN_DATE:
                         continue
 
-                    # Parse valores
+                    # Parse valores (ordem: Data | Último | Abertura | Máxima | Mínima | Vol.)
                     record = {
                         'date': date_obj,
                         'close': self._parse_number(cols[1].get_text(strip=True)),
@@ -333,11 +240,50 @@ class InvestingService:
                     continue
 
             records.sort(key=lambda x: x['date'])
-            logger.info(f"✅ {len(records)} registros parseados via scraping")
+            logger.info(f"✅ {len(records)} registros parseados")
             return records
 
         result = await loop.run_in_executor(None, scrape)
         return result
+
+    def _parse_divs(self, divs: list, start_date: datetime, end_date: datetime) -> List[Dict]:
+        """Parse dados de estrutura alternativa (divs)"""
+        records = []
+
+        for div in divs:
+            try:
+                date_elem = div.find('div', {'class': 'datatable_cell__date'})
+                if not date_elem:
+                    continue
+
+                date_obj = self._parse_date(date_elem.get_text(strip=True))
+
+                if date_obj < start_date.date() or date_obj > end_date.date():
+                    continue
+                if date_obj < self.MIN_DATE:
+                    continue
+
+                cells = div.find_all('div', {'class': 'datatable_cell'})
+                if len(cells) < 6:
+                    continue
+
+                record = {
+                    'date': date_obj,
+                    'close': self._parse_number(cells[1].get_text(strip=True)),
+                    'open': self._parse_number(cells[2].get_text(strip=True)),
+                    'high': self._parse_number(cells[3].get_text(strip=True)),
+                    'low': self._parse_number(cells[4].get_text(strip=True)),
+                    'volume': self._parse_volume(cells[5].get_text(strip=True))
+                }
+
+                records.append(record)
+
+            except (ValueError, IndexError) as e:
+                logger.debug(f"Div ignorado: {e}")
+                continue
+
+        records.sort(key=lambda x: x['date'])
+        return records
 
     def _parse_date(self, date_str: str) -> date:
         """Parse data de vários formatos"""
@@ -422,31 +368,15 @@ class InvestingService:
         logger.info(f"📊 Buscando Ibovespa do Investing.com ({start_date.date()} a {end_date.date()})")
 
         try:
-            # Tenta investiny primeiro
-            if INVESTINY_AVAILABLE and '^BVSP' in self.INVESTING_IDS:
-                try:
-                    records = await self._retry_with_backoff(
-                        self._fetch_with_investiny,
-                        self.INVESTING_IDS['^BVSP'],
-                        start_date,
-                        end_date
-                    )
-                    if records:
-                        logger.info(f"✅ {len(records)} registros do Ibovespa baixados (investiny)")
-                        return records
-                except Exception as e:
-                    logger.warning(f"investiny falhou, tentando scraping: {e}")
-
-            # Fallback: web scraping
             records = await self._retry_with_backoff(
                 self._fetch_with_scraping,
-                self.IBOVESPA_URL,
+                self.INVESTING_URLS['^BVSP'],
                 start_date,
                 end_date
             )
 
             if records:
-                logger.info(f"✅ {len(records)} registros do Ibovespa baixados (scraping)")
+                logger.info(f"✅ {len(records)} registros do Ibovespa baixados")
                 return records
             else:
                 raise Exception("Nenhum dado retornado")
@@ -498,17 +428,17 @@ class InvestingService:
                 try:
                     logger.info(f"   🔍 Processando {symbol}...")
 
-                    # Verifica se tem ID no mapa
-                    if symbol not in self.INVESTING_IDS:
-                        logger.warning(f"   ⚠️  {symbol}: ID não encontrado no mapa, pulando")
+                    # Verifica se tem URL no mapa
+                    if symbol not in self.INVESTING_URLS:
+                        logger.warning(f"   ⚠️  {symbol}: URL não encontrada no mapa, pulando")
                         continue
 
-                    investing_id = self.INVESTING_IDS[symbol]
+                    url = self.INVESTING_URLS[symbol]
 
                     # Tenta buscar com retry
                     prices_raw = await self._retry_with_backoff(
-                        self._fetch_with_investiny,
-                        investing_id,
+                        self._fetch_with_scraping,
+                        url,
                         start_date,
                         end_date
                     )
@@ -584,35 +514,26 @@ class InvestingService:
     async def test_connection(self) -> Dict:
         """Testa conexão com Investing.com"""
         try:
-            if INVESTINY_AVAILABLE:
-                # Testa com VALE3
-                test_symbol = 'VALE3'
-                logger.info(f"Testando conexão com Investing.com ({test_symbol})...")
+            # Testa com VALE3
+            test_symbol = 'VALE3'
+            logger.info(f"Testando conexão com Investing.com ({test_symbol})...")
 
-                end_date = datetime.now()
-                start_date = end_date - timedelta(days=30)
+            result = await self.fetch_single_stock(test_symbol, days=30)
 
-                result = await self.fetch_single_stock(test_symbol, days=30)
-
-                if result:
-                    return {
-                        'status': 'ok',
-                        'message': 'Conectado com sucesso ao Investing.com',
-                        'method': 'investiny',
-                        'test_symbol': test_symbol,
-                        'records_fetched': len(result['prices']),
-                        'latest_price': result['price']
-                    }
-                else:
-                    return {
-                        'status': 'warning',
-                        'message': 'Conectado mas sem dados',
-                        'test_symbol': test_symbol
-                    }
+            if result:
+                return {
+                    'status': 'ok',
+                    'message': 'Conectado com sucesso ao Investing.com',
+                    'method': 'web_scraping',
+                    'test_symbol': test_symbol,
+                    'records_fetched': len(result['prices']),
+                    'latest_price': result['price']
+                }
             else:
                 return {
-                    'status': 'error',
-                    'message': 'investiny não disponível'
+                    'status': 'warning',
+                    'message': 'Conectado mas sem dados',
+                    'test_symbol': test_symbol
                 }
 
         except Exception as e:
@@ -625,7 +546,7 @@ class InvestingService:
 
 # Instância global
 investing_service = InvestingService(
-    batch_size=8,          # 8 ações por batch
+    batch_size=6,          # 6 ações por batch
     max_retries=3,         # 3 tentativas
-    initial_backoff=2.0    # 2s backoff inicial
+    initial_backoff=3.0    # 3s backoff inicial
 )
