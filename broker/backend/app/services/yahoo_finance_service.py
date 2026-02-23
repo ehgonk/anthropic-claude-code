@@ -8,7 +8,7 @@ Usa httpx para fazer requests HTTP diretamente à API do Yahoo Finance,
 sem depender da biblioteca yfinance (que tem problemas com proxy/bloqueio).
 
 Critérios:
-- Data mínima: 1994-07-01 (início do Real - R$)
+- Data mínima: 2020-01-01 (período com melhor disponibilidade)
 - Ibovespa: símbolo ^BVSP
 - Ações brasileiras: sufixo .SA (ex: PETR4.SA)
 
@@ -47,8 +47,8 @@ YAHOO_HEADERS = {
 class YahooFinanceService:
     """Service to fetch stock data from Yahoo Finance via direct HTTP"""
 
-    # Data mínima: 1994-07-01 (início do Real)
-    MIN_DATE = date(1994, 7, 1)
+    # Data mínima: 2020-01-01 (período com melhor disponibilidade)
+    MIN_DATE = date(2020, 1, 1)
 
     # Ibovespa symbol on Yahoo Finance
     IBOVESPA_SYMBOL = "^BVSP"
@@ -85,55 +85,101 @@ class YahooFinanceService:
         symbol: str,
         start_date: datetime,
         end_date: datetime,
-        interval: str = "1d"
+        interval: str = "1d",
+        fallback_years: List[int] = None
     ) -> List[Dict]:
         """
-        Fetch chart data from Yahoo Finance API
+        Fetch chart data from Yahoo Finance API with automatic fallback
 
         Args:
             symbol: Yahoo Finance symbol (e.g., ^BVSP, VALE3.SA)
             start_date: Start datetime
             end_date: End datetime
             interval: Data interval (1d, 1wk, 1mo)
+            fallback_years: List of years to try if initial request fails (default: [2020, 2022])
 
         Returns:
             List of OHLCV records
         """
-        # URL-encode symbol (important for ^BVSP)
-        encoded_symbol = quote(symbol, safe='')
-        url = f"{YAHOO_CHART_URL}/{encoded_symbol}"
+        # Fallback strategy: try different start years if data doesn't exist
+        if fallback_years is None:
+            fallback_years = [start_date.year, 2022] if start_date.year < 2022 else [start_date.year]
 
-        params = {
-            "period1": self._to_unix(start_date),
-            "period2": self._to_unix(end_date),
-            "interval": interval,
-            "includeAdjustedClose": "true",
-            "events": "history",
-        }
+        last_error = None
 
-        logger.info(f"📥 Fetching {symbol} from Yahoo Finance API...")
-        logger.info(f"   URL: {url}")
-        logger.info(f"   Period: {start_date.date()} to {end_date.date()}")
+        for year in fallback_years:
+            try:
+                # Use the fallback year
+                current_start = datetime(year, 1, 1)
+                if current_start > end_date:
+                    continue
 
-        async with self._get_client() as client:
-            response = await client.get(url, params=params)
+                # URL-encode symbol (important for ^BVSP)
+                encoded_symbol = quote(symbol, safe='')
+                url = f"{YAHOO_CHART_URL}/{encoded_symbol}"
 
-            if response.status_code != 200:
-                error_msg = f"Yahoo Finance API returned HTTP {response.status_code}"
-                logger.error(f"❌ {error_msg}")
-                logger.error(f"   Response: {response.text[:500]}")
-                raise Exception(error_msg)
+                params = {
+                    "period1": self._to_unix(current_start),
+                    "period2": self._to_unix(end_date),
+                    "interval": interval,
+                    "includeAdjustedClose": "true",
+                    "events": "history",
+                }
 
-            data = response.json()
+                if year == start_date.year:
+                    logger.info(f"📥 Fetching {symbol} from Yahoo Finance API...")
+                    logger.info(f"   Period: {current_start.date()} to {end_date.date()}")
 
-        # Parse the chart response
-        chart = data.get("chart", {})
-        result = chart.get("result")
+                async with self._get_client() as client:
+                    response = await client.get(url, params=params)
 
-        if not result or len(result) == 0:
-            error = chart.get("error", {})
-            error_msg = error.get("description", "No data returned")
-            raise Exception(f"Yahoo Finance error: {error_msg}")
+                    if response.status_code not in [200, 400, 404]:
+                        error_msg = f"Yahoo Finance API returned HTTP {response.status_code}"
+                        logger.error(f"❌ {error_msg}")
+                        logger.error(f"   Response: {response.text[:500]}")
+                        raise Exception(error_msg)
+
+                    # Handle 400/404 - data doesn't exist for this period
+                    if response.status_code in [400, 404]:
+                        if year == start_date.year:
+                            logger.warning(f"⚠️  No data for {symbol} starting {year}, trying more recent years...")
+                        last_error = f"No data available starting {year}"
+                        continue
+
+                    data = response.json()
+
+                # Parse the chart response
+                chart = data.get("chart", {})
+                result = chart.get("result")
+
+                if not result or len(result) == 0:
+                    error = chart.get("error", {})
+                    error_msg = error.get("description", "No data returned")
+                    if "doesn't exist" in error_msg.lower() or "not found" in error_msg.lower():
+                        if year == start_date.year:
+                            logger.warning(f"⚠️  {symbol}: {error_msg}, trying more recent years...")
+                        last_error = error_msg
+                        continue
+                    raise Exception(f"Yahoo Finance error: {error_msg}")
+
+                # Successfully got data!
+                if year != start_date.year:
+                    logger.info(f"✅ {symbol}: Found data starting from {year}")
+
+                # Parse and return
+                break
+
+            except Exception as e:
+                if "doesn't exist" in str(e).lower() or "not found" in str(e).lower():
+                    last_error = str(e)
+                    continue
+                raise
+        else:
+            # All fallback attempts failed
+            logger.warning(f"⚠️  {symbol}: No historical data available (tried years {fallback_years})")
+            return []
+
+        # Parse result (moved outside the loop)
 
         result = result[0]
         timestamps = result.get("timestamp", [])
@@ -141,7 +187,8 @@ class YahooFinanceService:
         quotes = indicators.get("quote", [{}])[0]
 
         if not timestamps:
-            raise Exception("No timestamps in Yahoo Finance response")
+            logger.warning(f"⚠️  {symbol}: No timestamps in response")
+            return []
 
         opens = quotes.get("open", [])
         highs = quotes.get("high", [])

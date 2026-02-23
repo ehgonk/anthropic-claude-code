@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Download histórico completo desde 1994 (início do Real)
+Download histórico completo desde 2020
 
-Baixa dados históricos das ações brasileiras do Investing.com
-desde 1994-07-01 até hoje e salva no banco de dados.
+Baixa dados históricos das ações brasileiras do Yahoo Finance
+desde 2020-01-01 até hoje e salva no banco de dados.
 
-FONTE ÚNICA: Investing.com
-- Sistema de batching (8 ações por vez)
-- Rate limiting (12 req/min)
-- Retry com exponential backoff
+FONTE ÚNICA: Yahoo Finance
+- API oficial e gratuita
+- Sem rate limiting
+- Retry automático
 
 Uso:
     python scripts/download_historical.py
@@ -25,7 +25,8 @@ from datetime import datetime
 from sqlalchemy import select
 from app.database import AsyncSessionLocal
 from app.models import Stock, StockPrice
-from app.services.investing_service import investing_service
+from app.services.yahoo_finance_service import yahoo_finance_service
+from app.config.b3_stocks import ALL_B3_STOCKS
 import logging
 
 # Configure logging
@@ -40,36 +41,34 @@ logger = logging.getLogger(__name__)
 async def download_and_save_stocks():
     """Download historical data and save to database"""
 
-    # Date range: from Real currency start to today
-    start_date = datetime(1994, 7, 1)
+    # Date range: from 2020 to today
+    start_date = datetime(2020, 1, 1)
     end_date = datetime.now()
 
-    # Get available symbols from Investing IDs (excluding Ibovespa index)
-    symbols = [s for s in investing_service.INVESTING_IDS.keys() if s != '^BVSP']
+    # Get all B3 stocks
+    symbols = ALL_B3_STOCKS
 
     logger.info("=" * 70)
-    logger.info("📥 DOWNLOAD DE DADOS HISTÓRICOS - INVESTING.COM")
+    logger.info("📥 DOWNLOAD DE DADOS HISTÓRICOS - YAHOO FINANCE")
     logger.info("=" * 70)
     logger.info(f"📅 Período: {start_date.date()} até {end_date.date()}")
-    logger.info(f"📊 Ações disponíveis: {len(symbols)} símbolos")
+    logger.info(f"📊 Ações: {len(symbols)} símbolos")
     logger.info(f"💰 Moeda: R$ (Real)")
-    logger.info(f"⚙️  Sistema: Batching (8/batch) + Rate Limiting (12 req/min)")
+    logger.info(f"🌐 Fonte: Yahoo Finance API")
     logger.info("")
 
-    # Fetch data from Investing.com
-    logger.info("🔍 Buscando dados do Investing.com...")
-    logger.info(f"⚠️  Isso pode demorar vários minutos devido ao rate limiting...")
-    logger.info(f"   Tempo estimado: ~{len(symbols) * 5 / 60:.1f} minutos")
+    # Fetch data from Yahoo Finance
+    logger.info("🔍 Buscando dados do Yahoo Finance...")
     logger.info("")
 
-    stock_data = await investing_service.fetch_stock_data(
+    stock_data = await yahoo_finance_service.fetch_stock_data(
         symbols=symbols,
         start_date=start_date,
         end_date=end_date
     )
 
     if not stock_data:
-        logger.error("❌ Nenhum dado retornado do Investing.com")
+        logger.error("❌ Nenhum dado retornado do Yahoo Finance")
         return
 
     logger.info("")
