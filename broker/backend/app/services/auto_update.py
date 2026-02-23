@@ -7,7 +7,7 @@ on a scheduled basis (daily by default).
 ✅ FONTE: Yahoo Finance - API oficial, grátis e confiável
 
 📅 HISTÓRICO COMPLETO:
-- Download desde 2020 (período com melhor disponibilidade)
+- Download desde 2000 (26 anos de histórico)
 - Dados via httpx direto à API do Yahoo Finance
 - Retry automático com backoff
 - Sincronização inteligente com verificação de gaps
@@ -28,8 +28,8 @@ from ..config.b3_stocks import ALL_B3_STOCKS
 # Configure logger
 logger = logging.getLogger(__name__)
 
-# Data de início para downloads históricos (2020 - boa disponibilidade no Yahoo Finance)
-HISTORICAL_START_YEAR = 2020
+# Data de início para downloads históricos (2000 - boa disponibilidade no Yahoo Finance)
+HISTORICAL_START_YEAR = 2000
 
 # Tamanho do batch (anos por batch)
 BATCH_SIZE_YEARS = 3

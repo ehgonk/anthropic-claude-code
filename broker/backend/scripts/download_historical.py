@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Download histórico completo desde 2020
+Download histórico completo desde 2000
 
 Baixa dados históricos das ações brasileiras do Yahoo Finance
-desde 2020-01-01 até hoje e salva no banco de dados.
+desde 2000-01-01 até hoje e salva no banco de dados.
 
 FONTE ÚNICA: Yahoo Finance
 - API oficial e gratuita
@@ -41,8 +41,8 @@ logger = logging.getLogger(__name__)
 async def download_and_save_stocks():
     """Download historical data and save to database"""
 
-    # Date range: from 2020 to today
-    start_date = datetime(2020, 1, 1)
+    # Date range: from 2000 to today
+    start_date = datetime(2000, 1, 1)
     end_date = datetime.now()
 
     # Get all B3 stocks

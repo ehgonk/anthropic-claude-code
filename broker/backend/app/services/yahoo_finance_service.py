@@ -8,7 +8,7 @@ Usa httpx para fazer requests HTTP diretamente à API do Yahoo Finance,
 sem depender da biblioteca yfinance (que tem problemas com proxy/bloqueio).
 
 Critérios:
-- Data mínima: 2020-01-01 (período com melhor disponibilidade)
+- Data mínima: 2000-01-01 (26 anos de histórico)
 - Ibovespa: símbolo ^BVSP
 - Ações brasileiras: sufixo .SA (ex: PETR4.SA)
 
@@ -47,8 +47,8 @@ YAHOO_HEADERS = {
 class YahooFinanceService:
     """Service to fetch stock data from Yahoo Finance via direct HTTP"""
 
-    # Data mínima: 2020-01-01 (período com melhor disponibilidade)
-    MIN_DATE = date(2020, 1, 1)
+    # Data mínima: 2000-01-01 (26 anos de histórico)
+    MIN_DATE = date(2000, 1, 1)
 
     # Ibovespa symbol on Yahoo Finance
     IBOVESPA_SYMBOL = "^BVSP"
@@ -96,14 +96,14 @@ class YahooFinanceService:
             start_date: Start datetime
             end_date: End datetime
             interval: Data interval (1d, 1wk, 1mo)
-            fallback_years: List of years to try if initial request fails (default: [2020, 2022])
+            fallback_years: List of years to try if initial request fails (default: [2000, 2010, 2015])
 
         Returns:
             List of OHLCV records
         """
         # Fallback strategy: try different start years if data doesn't exist
         if fallback_years is None:
-            fallback_years = [start_date.year, 2022] if start_date.year < 2022 else [start_date.year]
+            fallback_years = [start_date.year, 2010, 2015] if start_date.year < 2015 else [start_date.year]
 
         last_error = None
 
