@@ -21,7 +21,6 @@ class Settings(BaseSettings):
 
     # B3 Data Sources
     brapi_base_url: str = "https://brapi.dev/api"
-    b3_cotahist_url: str = "https://bvmf.bmfbovespa.com.br/InstDados/SerHist"
 
     class Config:
         env_prefix = "BROKER_"

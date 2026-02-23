@@ -1,6 +1,6 @@
 # ⚡ FASE 2: Sistema de Auto-Update
 
-Sistema completo de atualização automática de dados da B3.
+Sistema completo de atualização automática de dados da B3 usando Yahoo Finance API.
 
 ---
 
@@ -130,8 +130,8 @@ broker/
            ▼
 ┌─────────────────────────┐
 │  For each year:         │
-│  - Download COTAHIST    │
-│  - Parse data           │
+│  - Fetch from Yahoo API │
+│  - Parse JSON data      │
 │  - Update database      │
 └──────────┬──────────────┘
            │

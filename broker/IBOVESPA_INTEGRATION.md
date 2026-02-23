@@ -21,7 +21,7 @@ O sistema agora inclui:
 
 | Fonte | Dados | Status |
 |-------|-------|--------|
-| **COTAHIST (B3)** | Ações individuais | ✅ Integrado |
+| **Yahoo Finance** | Ações individuais (*.SA) | ✅ Integrado |
 | **Yahoo Finance** | Índice Ibovespa (^BVSP) | ✅ Integrado |
 
 ### Fluxo de Atualização
@@ -41,8 +41,8 @@ O sistema agora inclui:
            │
            ▼
 ┌─────────────────────────┐
-│  2. Update Stocks       │  ← B3 COTAHIST
-│     - Download COTAHIST │
+│  2. Update Stocks       │  ← Yahoo Finance (*.SA)
+│     - Download via YF   │
 │     - Parse stocks      │
 │     - Save to DB        │
 └─────────────────────────┘
@@ -96,12 +96,12 @@ result = await ibovespa_service.run_full_update()
 O Ibovespa é atualizado **PRIMEIRO**, antes das ações:
 
 ```python
-# Update Ibovespa index FIRST (independent from COTAHIST)
+# Update Ibovespa index FIRST (using Yahoo Finance)
 logger.info("🔄 Updating Ibovespa index...")
 ibov_result = await ibovespa_service.run_incremental_update()
 logger.info(f"✅ Ibovespa update: {ibov_result['records_inserted']} new records")
 
-# Then update stocks from COTAHIST
+# Then update stocks from Yahoo Finance
 for year in years:
     year_result = await self.update_year(db, year)
 ```
@@ -214,25 +214,24 @@ pip install -r requirements.txt
 ### Proxy/Firewall
 
 Em ambientes com proxy/firewall restritivo:
-- ❌ B3 COTAHIST: Bloqueado (403 Forbidden)
-- ❌ Yahoo Finance: Bloqueado (403 Forbidden)
+- ⚠️ Yahoo Finance: Pode ser bloqueado (403 Forbidden)
 
 **Solução**: Em produção, configurar exceções de proxy para:
-- `bvmf.bmfbovespa.com.br`
+- `query1.finance.yahoo.com`
 - `*.yahoo.com`
-- `fc.yahoo.com`
 
-### Yahoo Finance vs B3 Direct
+### Yahoo Finance - Fonte Única
 
-| Aspecto | Yahoo Finance | B3 Direct |
-|---------|---------------|-----------|
-| Acesso | ✅ Sem restrições | ❌ Captcha + 403 |
-| Dados | B3 data aggregated | B3 official source |
-| Histórico | Desde 1994 | Desde 1968 (teoricamente) |
-| Latência | Baixa | Alta (download ZIP) |
-| Confiabilidade | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ (bloqueios) |
+| Aspecto | Yahoo Finance |
+|---------|---------------|
+| Acesso | ✅ API gratuita sem autenticação |
+| Dados | Dados da B3 agregados e confiáveis |
+| Histórico | Desde 2000 (26+ anos) |
+| Latência | Baixa (API REST) |
+| Confiabilidade | ⭐⭐⭐⭐⭐ |
+| Formato | JSON via HTTP |
 
-**Decisão**: Usar Yahoo Finance por ser mais confiável e sem bloqueios.
+**Decisão**: Yahoo Finance é a fonte única de dados - confiável, gratuita e sem bloqueios.
 
 ---
 

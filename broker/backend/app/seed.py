@@ -1,16 +1,19 @@
 """
-Seed database with real B3 COTAHIST data
+Seed database with real Yahoo Finance data
 
-This script downloads and parses B3 COTAHIST files (official historical stock data)
+This script downloads stock data from Yahoo Finance (official free API)
 and populates the database with real stock prices from the Brazilian stock exchange.
+
+Data source: Yahoo Finance API (https://finance.yahoo.com)
+Brazilian stocks use .SA suffix (e.g., PETR4.SA)
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import select, delete
 from .database import AsyncSessionLocal, init_db
 from .models import Stock, StockPrice
-from .services.b3_cotahist import b3_service
+from .services.yahoo_finance_service import yahoo_finance_service
 
 
 # Top B3 stocks by market cap and liquidity
@@ -33,40 +36,36 @@ TARGET_STOCKS = [
 ]
 
 
-async def seed_with_cotahist_data(year: int = None):
+async def seed_with_yahoo_finance(days: int = 365):
     """
-    Seed database with real B3 COTAHIST data
+    Seed database with real Yahoo Finance data
 
     Args:
-        year: Year to download data for (defaults to current year)
+        days: Number of days of historical data to download (default: 365)
     """
-    if year is None:
-        year = datetime.now().year
-
-    print(f"=== Seeding Broker Database with B3 COTAHIST {year} ===\n")
+    print(f"=== Seeding Broker Database with Yahoo Finance ===\n")
 
     print("Initializing database...")
     await init_db()
 
-    print(f"Downloading COTAHIST data for {year}...")
+    print(f"Downloading data for last {days} days from Yahoo Finance...")
     print(f"Target stocks: {', '.join(TARGET_STOCKS)}\n")
 
     try:
-        # Download and parse COTAHIST data
-        stock_data = await b3_service.get_stock_data(year, symbols=TARGET_STOCKS)
+        # Calculate date range
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
 
-        if not stock_data:
-            print(f"⚠️  No data found for year {year}")
-            print("Falling back to previous year...")
-            stock_data = await b3_service.get_stock_data(year - 1, symbols=TARGET_STOCKS)
+        # Download stock data from Yahoo Finance
+        stock_records = await yahoo_finance_service.fetch_stock_data(
+            symbols=TARGET_STOCKS,
+            start_date=start_date,
+            end_date=end_date
+        )
 
-        if not stock_data:
+        if not stock_records:
             print("❌ No data available. Cannot seed database.")
             return
-
-        # Convert to stock records
-        print("\nProcessing stock data...")
-        stock_records = b3_service.df_to_stock_records(stock_data)
 
         print(f"Found {len(stock_records)} stocks with data\n")
 
@@ -122,8 +121,8 @@ async def seed_with_cotahist_data(year: int = None):
                 print(f"  ✅ {symbol} completed\n")
 
         print("=" * 60)
-        print("✅ Database seeded successfully with real B3 COTAHIST data!")
-        print(f"   Year: {year}")
+        print("✅ Database seeded successfully with Yahoo Finance data!")
+        print(f"   Period: {start_date.date()} to {end_date.date()}")
         print(f"   Stocks: {len(stock_records)}")
         print("=" * 60)
 
@@ -133,8 +132,8 @@ async def seed_with_cotahist_data(year: int = None):
 
 
 async def seed_database():
-    """Main seed function - uses real COTAHIST data"""
-    await seed_with_cotahist_data()
+    """Main seed function - uses real Yahoo Finance data"""
+    await seed_with_yahoo_finance()
 
 
 if __name__ == "__main__":

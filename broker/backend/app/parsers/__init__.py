@@ -1,3 +1,4 @@
-from .cotahist_parser import CotahistParser
+# Parsers module - currently empty
+# Yahoo Finance data is fetched directly via API without custom parsers
 
-__all__ = ["CotahistParser"]
+__all__ = []
