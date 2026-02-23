@@ -17,6 +17,7 @@ MÉTODO: Web scraping direto das páginas de dados históricos
 import asyncio
 import logging
 import time
+import random
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Optional
 from dataclasses import dataclass
@@ -244,34 +245,61 @@ class InvestingService:
         self,
         batch_size: int = 6,
         max_retries: int = 3,
-        initial_backoff: float = 3.0
+        initial_backoff: float = 5.0
     ):
         """
         Args:
             batch_size: Número de ações por batch (padrão: 6)
             max_retries: Tentativas máximas por requisição (padrão: 3)
-            initial_backoff: Backoff inicial em segundos (padrão: 3.0)
+            initial_backoff: Backoff inicial em segundos (padrão: 5.0)
         """
         self.batch_size = batch_size
         self.max_retries = max_retries
         self.initial_backoff = initial_backoff
 
-        # Rate limiter global
+        # Rate limiter global (mais conservador)
         self.rate_limiter = RateLimiter(
-            max_requests_per_minute=10,
-            min_delay_seconds=6.0
+            max_requests_per_minute=6,  # Reduzido de 10 para 6
+            min_delay_seconds=10.0       # Aumentado de 6 para 10
         )
 
-        # Cloudscraper para bypass de Cloudflare
+        # Headers realistas para bypass de Cloudflare
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
+            'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"'
+        }
+
+        # Cloudscraper para bypass de Cloudflare - configuração mais agressiva
         self.scraper = cloudscraper.create_scraper(
             browser={
                 'browser': 'chrome',
                 'platform': 'windows',
+                'desktop': True,
                 'mobile': False
             },
-            delay=10  # Browser simulation delay
+            delay=15,  # Aumentado de 10 para 15 segundos
+            captcha={
+                'provider': 'return_response'  # Retorna response mesmo com captcha
+            }
         )
-        self.timeout = 30
+
+        # Atualizar headers do scraper
+        self.scraper.headers.update(self.headers)
+
+        self.timeout = 45  # Aumentado de 30 para 45 segundos
 
     async def _retry_with_backoff(self, func, *args, **kwargs):
         """Executa função com retry e exponential backoff"""
@@ -281,14 +309,25 @@ class InvestingService:
                 result = await func(*args, **kwargs)
                 return result
             except Exception as e:
+                error_msg = str(e)
+
                 if attempt == self.max_retries - 1:
                     raise
 
-                backoff = self.initial_backoff * (2 ** attempt)
-                logger.warning(
-                    f"⚠️  Tentativa {attempt + 1}/{self.max_retries} falhou: {e}"
-                )
-                logger.info(f"   Aguardando {backoff:.1f}s antes de tentar novamente...")
+                # Backoff mais agressivo para HTTP 403 (Cloudflare)
+                if '403' in error_msg or 'Cloudflare' in error_msg:
+                    backoff = self.initial_backoff * (3 ** attempt)  # Crescimento mais rápido
+                    logger.warning(
+                        f"⚠️  Tentativa {attempt + 1}/{self.max_retries} falhou: {error_msg}"
+                    )
+                    logger.info(f"   🔒 Cloudflare detected - aguardando {backoff:.1f}s antes de retry...")
+                else:
+                    backoff = self.initial_backoff * (2 ** attempt)
+                    logger.warning(
+                        f"⚠️  Tentativa {attempt + 1}/{self.max_retries} falhou: {error_msg}"
+                    )
+                    logger.info(f"   Aguardando {backoff:.1f}s antes de tentar novamente...")
+
                 await asyncio.sleep(backoff)
 
     async def _fetch_with_scraping(
@@ -313,13 +352,43 @@ class InvestingService:
         def scrape():
             logger.info(f"🌐 Scraping {url}...")
 
-            response = self.scraper.get(url, timeout=self.timeout)
+            # Adicionar delay randômico antes da requisição (3-7 segundos)
+            import random
+            pre_delay = random.uniform(3, 7)
+            logger.debug(f"   Delay pré-requisição: {pre_delay:.1f}s")
+            time.sleep(pre_delay)
+
+            # Fazer a requisição com headers completos
+            response = self.scraper.get(
+                url,
+                timeout=self.timeout,
+                allow_redirects=True,
+                verify=True
+            )
+
+            logger.debug(f"   Status code: {response.status_code}")
+            logger.debug(f"   Headers: {dict(response.headers)}")
+
+            if response.status_code == 403:
+                # Cloudflare bloqueou - adicionar delay maior antes de retry
+                logger.warning("   🚫 HTTP 403 - Cloudflare detectou bot")
+                raise Exception(f"HTTP 403 - Cloudflare protection triggered")
+
+            if response.status_code == 429:
+                # Rate limit excedido
+                logger.warning("   ⚠️  HTTP 429 - Rate limit excedido")
+                raise Exception(f"HTTP 429 - Rate limit exceeded")
 
             if response.status_code != 200:
                 raise Exception(f"HTTP {response.status_code}")
 
             html = response.text
             logger.debug(f"✅ Página carregada ({len(html)} bytes)")
+
+            # Verificar se Cloudflare retornou challenge page
+            if 'cf-browser-verification' in html or 'Just a moment' in html:
+                logger.warning("   🚫 Cloudflare challenge page detectada")
+                raise Exception("Cloudflare challenge page - bot detected")
 
             soup = BeautifulSoup(html, 'lxml')
 

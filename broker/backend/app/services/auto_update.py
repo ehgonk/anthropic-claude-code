@@ -1,14 +1,14 @@
 """
-Auto-update service for stock data - YAHOO FINANCE (yfinance)
+Auto-update service for stock data - INVESTING.COM ONLY
 
-This service automatically downloads and updates stock data from Yahoo Finance
+This service automatically downloads and updates stock data from Investing.com
 on a scheduled basis (daily by default).
 
-⚠️ FONTE: Yahoo Finance via yfinance library
+⚠️ FONTE ÚNICA: Investing.com - Com batching e rate limiting
 
 📅 HISTÓRICO COMPLETO:
 - Download desde 1994 (início do Real - R$)
-- Batches de ações com rate limiting
+- Batches de 8 ações com rate limiting (12 req/min)
 - Retry com exponential backoff
 - Sincronização inteligente com verificação de gaps
 """
@@ -19,11 +19,10 @@ from datetime import datetime, timedelta, date
 from typing import Optional, Dict, Any, List, Tuple
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-import yfinance as yf
 
 from ..models import Stock, StockPrice
 from ..database import AsyncSessionLocal
-from ..config.b3_stocks import ALL_B3_STOCKS
+from .investing_service import investing_service
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -182,7 +181,7 @@ class AutoUpdateService:
         end_year: int
     ) -> Dict[str, Any]:
         """
-        Update data for a range of years using Yahoo Finance (yfinance)
+        Update data for a range of years using Investing.com
 
         Args:
             db: Database session
@@ -192,7 +191,7 @@ class AutoUpdateService:
         Returns:
             Statistics about the update
         """
-        logger.info(f"📥 Downloading data from Yahoo Finance for years {start_year}-{end_year}")
+        logger.info(f"📥 Downloading data from Investing.com for years {start_year}-{end_year}")
 
         # Calculate date range
         start_date = datetime(start_year, 1, 1)
@@ -204,138 +203,83 @@ class AutoUpdateService:
             end_date = now
             logger.info(f"   Adjusted end date to today: {end_date.strftime('%Y-%m-%d')}")
 
-        # Get symbols from B3 stocks config and add .SA suffix
-        symbols = [f"{symbol}.SA" for symbol in ALL_B3_STOCKS]
+        # Get available symbols from Investing IDs (excluding Ibovespa)
+        symbols = [s for s in investing_service.INVESTING_IDS.keys() if s != '^BVSP']
 
-        logger.info(f"📊 Downloading {len(symbols)} stocks from Yahoo Finance...")
+        # Download from Investing.com
+        stock_records = await investing_service.fetch_stock_data(
+            symbols=symbols,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        if not stock_records:
+            logger.warning(f"⚠️ No data found for years {start_year}-{end_year}")
+            return {"years": f"{start_year}-{end_year}", "stocks": 0, "prices": 0}
 
         total_prices = 0
         stocks_updated = 0
-        stocks_failed = 0
 
-        # Process stocks in batches to avoid overwhelming yfinance
-        batch_size = 10
-        for i in range(0, len(symbols), batch_size):
-            batch_symbols = symbols[i:i+batch_size]
+        # Update database
+        for symbol, stock_data in stock_records.items():
+            # Check if stock exists
+            result = await db.execute(select(Stock).where(Stock.symbol == symbol))
+            stock = result.scalar_one_or_none()
 
-            try:
-                # Download data for batch using yfinance
-                data = yf.download(
-                    tickers=batch_symbols,
-                    start=start_date.strftime('%Y-%m-%d'),
-                    end=end_date.strftime('%Y-%m-%d'),
-                    group_by='ticker',
-                    auto_adjust=False,
-                    progress=False,
-                    threads=True
+            if not stock:
+                # Create new stock
+                stock = Stock(
+                    symbol=symbol,
+                    name=stock_data['name'],
+                    price=stock_data['price'],
+                    change_percent=stock_data['change_percent'],
+                    volume=stock_data['volume'],
+                    updated_at=datetime.utcnow()
                 )
+                db.add(stock)
+                await db.flush()
+            else:
+                # Update existing stock with latest data
+                stock.name = stock_data['name']
+                stock.price = stock_data['price']
+                stock.change_percent = stock_data['change_percent']
+                stock.volume = stock_data['volume']
+                stock.updated_at = datetime.utcnow()
 
-                if data.empty:
-                    logger.warning(f"⚠️ No data returned for batch {i//batch_size + 1}")
-                    continue
+            # Add new prices (skip duplicates)
+            for price_data in stock_data['prices']:
+                # Check if price already exists
+                existing = await db.execute(
+                    select(StockPrice).where(
+                        StockPrice.stock_id == stock.id,
+                        StockPrice.date == price_data['date']
+                    )
+                )
+                if existing.scalar_one_or_none():
+                    continue  # Skip duplicate
 
-                # Process each symbol in batch
-                for yf_symbol in batch_symbols:
-                    symbol = yf_symbol.replace('.SA', '')  # Remove .SA suffix for database
+                stock_price = StockPrice(
+                    stock_id=stock.id,
+                    date=price_data['date'],
+                    open=price_data['open'],
+                    high=price_data['high'],
+                    low=price_data['low'],
+                    close=price_data['close'],
+                    volume=price_data['volume'],
+                )
+                db.add(stock_price)
+                total_prices += 1
 
-                    try:
-                        # Get data for this symbol
-                        if len(batch_symbols) == 1:
-                            symbol_data = data
-                        else:
-                            symbol_data = data[yf_symbol] if yf_symbol in data else None
+            stocks_updated += 1
 
-                        if symbol_data is None or symbol_data.empty:
-                            stocks_failed += 1
-                            continue
+        await db.commit()
 
-                        # Check if stock exists in database
-                        result = await db.execute(select(Stock).where(Stock.symbol == symbol))
-                        stock = result.scalar_one_or_none()
-
-                        # Get latest price info
-                        latest_close = symbol_data['Close'].iloc[-1] if not symbol_data.empty else 0.0
-                        latest_volume = symbol_data['Volume'].iloc[-1] if not symbol_data.empty else 0
-
-                        if not stock:
-                            # Create new stock
-                            stock = Stock(
-                                symbol=symbol,
-                                name=symbol,  # yfinance doesn't provide name in historical data
-                                price=float(latest_close),
-                                change_percent=0.0,
-                                volume=int(latest_volume),
-                                updated_at=datetime.utcnow()
-                            )
-                            db.add(stock)
-                            await db.flush()
-                        else:
-                            # Update existing stock with latest data
-                            stock.price = float(latest_close)
-                            stock.volume = int(latest_volume)
-                            stock.updated_at = datetime.utcnow()
-
-                        # Add historical prices
-                        for date_index, row in symbol_data.iterrows():
-                            # Skip if any required field is NaN
-                            if (row['Open'] != row['Open'] or  # NaN check
-                                row['High'] != row['High'] or
-                                row['Low'] != row['Low'] or
-                                row['Close'] != row['Close']):
-                                continue
-
-                            price_date = date_index.strftime('%Y-%m-%d')
-
-                            # Check if price already exists
-                            existing = await db.execute(
-                                select(StockPrice).where(
-                                    StockPrice.stock_id == stock.id,
-                                    StockPrice.date == price_date
-                                )
-                            )
-                            if existing.scalar_one_or_none():
-                                continue  # Skip duplicate
-
-                            stock_price = StockPrice(
-                                stock_id=stock.id,
-                                date=price_date,
-                                open=float(row['Open']),
-                                high=float(row['High']),
-                                low=float(row['Low']),
-                                close=float(row['Close']),
-                                volume=int(row['Volume']) if row['Volume'] == row['Volume'] else 0,
-                            )
-                            db.add(stock_price)
-                            total_prices += 1
-
-                        stocks_updated += 1
-
-                    except Exception as e:
-                        logger.error(f"❌ Error processing {symbol}: {str(e)}")
-                        stocks_failed += 1
-                        continue
-
-                await db.commit()
-
-                # Small delay between batches
-                if i + batch_size < len(symbols):
-                    await asyncio.sleep(0.5)
-
-            except Exception as e:
-                logger.error(f"❌ Error downloading batch {i//batch_size + 1}: {str(e)}")
-                stocks_failed += len(batch_symbols)
-                continue
-
-        logger.info(
-            f"✅ Updated {stocks_updated} stocks with {total_prices} new prices for {start_year}-{end_year} "
-            f"({stocks_failed} failed)"
-        )
+        logger.info(f"✅ Updated {stocks_updated} stocks with {total_prices} new prices for {start_year}-{end_year}")
 
         return {
             "years": f"{start_year}-{end_year}",
             "stocks": stocks_updated,
-            "prices": total_prices,
-            "failed": stocks_failed
+            "prices": total_prices
         }
 
     async def update_year(self, db: AsyncSession, year: int) -> Dict[str, Any]:
@@ -365,12 +309,12 @@ class AutoUpdateService:
         self.status.start_run()
 
         try:
-            # Yahoo Finance is the single data source
-            logger.info("📊 Using Yahoo Finance (yfinance) as data source")
+            # Investing.com is the single data source
+            logger.info("📊 Using Investing.com as single data source")
             ibov_result = {
-                'status': 'yahoo_finance',
+                'status': 'investing_com',
                 'symbol': 'IBOV',
-                'message': 'Data from Yahoo Finance via yfinance library'
+                'message': 'Data from Investing.com with batching + rate limiting'
             }
 
             async with AsyncSessionLocal() as db:
