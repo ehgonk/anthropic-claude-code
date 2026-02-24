@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { Agent } from 'http'
 
 export default defineConfig({
   plugins: [react()],
@@ -11,6 +12,7 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8001',
         changeOrigin: true,
+        agent: new Agent({ keepAlive: true }),
       },
     },
   },
