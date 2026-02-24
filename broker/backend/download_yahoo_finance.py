@@ -37,29 +37,34 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def get_all_stocks_from_db() -> List[Tuple[int, str, str]]:
-    """Get all stocks from database (id, symbol, name)"""
+def get_all_stocks_from_db() -> List[Tuple[str, str]]:
+    """Get all stocks from database (symbol, name)"""
     conn = sqlite3.connect(str(DB_PATH))
     cur = conn.cursor()
-    cur.execute("SELECT id, symbol, name FROM stocks ORDER BY symbol")
+    cur.execute("SELECT symbol, name FROM stocks ORDER BY symbol")
     stocks = cur.fetchall()
     conn.close()
     return stocks
 
 
-def get_last_date_for_stock(stock_id: int) -> Optional[date]:
+def get_last_date_for_stock(symbol: str) -> Optional[date]:
     """Get the last date we have data for a stock"""
     conn = sqlite3.connect(str(DB_PATH))
     cur = conn.cursor()
     cur.execute(
-        "SELECT MAX(date) FROM stock_prices WHERE stock_id = ?",
-        (stock_id,)
+        "SELECT MAX(date) FROM stock_prices WHERE symbol = ?",
+        (symbol,)
     )
     result = cur.fetchone()[0]
     conn.close()
 
     if result:
-        return datetime.strptime(result, "%Y-%m-%d").date()
+        # Handle both date formats
+        if isinstance(result, str):
+            if 'T' in result:
+                return datetime.fromisoformat(result).date()
+            return datetime.strptime(result, "%Y-%m-%d").date()
+        return result
     return None
 
 
@@ -121,7 +126,7 @@ def download_stock_data(
         return None
 
 
-def save_stock_data(stock_id: int, symbol: str, records: List[Dict]) -> int:
+def save_stock_data(symbol: str, records: List[Dict]) -> int:
     """
     Save stock data to database
 
@@ -137,8 +142,8 @@ def save_stock_data(stock_id: int, symbol: str, records: List[Dict]) -> int:
     try:
         # Get existing dates to avoid duplicates
         cur.execute(
-            "SELECT date FROM stock_prices WHERE stock_id = ?",
-            (stock_id,)
+            "SELECT date FROM stock_prices WHERE symbol = ?",
+            (symbol,)
         )
         existing_dates = set(row[0] for row in cur.fetchall())
 
@@ -148,19 +153,21 @@ def save_stock_data(stock_id: int, symbol: str, records: List[Dict]) -> int:
             date_str = rec['date'].strftime("%Y-%m-%d")
             if date_str not in existing_dates:
                 new_records.append((
-                    stock_id,
+                    symbol,
                     date_str,
                     rec['open'],
                     rec['high'],
                     rec['low'],
                     rec['close'],
-                    rec['volume']
+                    rec['volume'],
+                    'yahoo_finance',
+                    datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
                 ))
 
         if new_records:
             cur.executemany(
-                "INSERT INTO stock_prices (stock_id, date, open, high, low, close, volume) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO stock_prices (symbol, date, open, high, low, close, volume, source, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 new_records
             )
 
@@ -171,13 +178,13 @@ def save_stock_data(stock_id: int, symbol: str, records: List[Dict]) -> int:
 
             cur.execute(
                 "UPDATE stocks SET price = ?, change_percent = ?, volume = ?, updated_at = ? "
-                "WHERE id = ?",
+                "WHERE symbol = ?",
                 (
                     latest['close'],
                     round(change_pct, 4),
                     latest['volume'],
                     datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
-                    stock_id
+                    symbol
                 )
             )
 
@@ -201,7 +208,7 @@ def clear_progress():
 
 
 def process_batch(
-    batch: List[Tuple[int, str, str]],
+    batch: List[Tuple[str, str]],
     start_date: str,
     end_date: str,
     completed_stocks: set
@@ -219,7 +226,7 @@ def process_batch(
         'new_records': 0
     }
 
-    for stock_id, symbol, name in batch:
+    for symbol, name in batch:
         stats['attempted'] += 1
 
         # Skip if already completed
@@ -229,7 +236,7 @@ def process_batch(
             continue
 
         # Check last date in DB
-        last_date = get_last_date_for_stock(stock_id)
+        last_date = get_last_date_for_stock(symbol)
         download_start = start_date
 
         if last_date:
@@ -247,7 +254,7 @@ def process_batch(
             continue
 
         # Save to database
-        new_records = save_stock_data(stock_id, symbol, data['records'])
+        new_records = save_stock_data(symbol, data['records'])
         stats['new_records'] += new_records
         stats['succeeded'] += 1
 
@@ -282,7 +289,7 @@ def main():
 
     # Filter by symbol if specified
     if args.symbol:
-        all_stocks = [s for s in all_stocks if s[1] == args.symbol.upper()]
+        all_stocks = [s for s in all_stocks if s[0] == args.symbol.upper()]
         if not all_stocks:
             logger.error(f"Symbol {args.symbol} not found in database")
             return
@@ -294,7 +301,7 @@ def main():
         logger.info(f"Resuming - {len(completed)} stocks already completed")
 
     # Calculate batches
-    remaining_stocks = [s for s in all_stocks if s[1] not in completed]
+    remaining_stocks = [s for s in all_stocks if s[0] not in completed]
     total_batches = (len(remaining_stocks) + args.batch_size - 1) // args.batch_size
 
     if not remaining_stocks:
