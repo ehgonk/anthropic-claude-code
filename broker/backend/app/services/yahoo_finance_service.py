@@ -86,7 +86,8 @@ class YahooFinanceService:
         start_date: datetime,
         end_date: datetime,
         interval: str = "1d",
-        fallback_years: List[int] = None
+        fallback_years: List[int] = None,
+        meta_out: Optional[dict] = None
     ) -> List[Dict]:
         """
         Fetch chart data from Yahoo Finance API with automatic fallback
@@ -182,6 +183,10 @@ class YahooFinanceService:
         # Parse result (moved outside the loop)
 
         result = result[0]
+        if meta_out is not None:
+            meta = result.get('meta', {})
+            meta_out['longName'] = meta.get('longName', '')
+            meta_out['shortName'] = meta.get('shortName', '')
         timestamps = result.get("timestamp", [])
         indicators = result.get("indicators", {})
         quotes = indicators.get("quote", [{}])[0]
@@ -307,11 +312,13 @@ class YahooFinanceService:
             try:
                 yahoo_symbol = self._add_suffix(symbol)
 
+                meta = {}
                 prices_raw = await self._fetch_chart_data(
                     symbol=yahoo_symbol,
                     start_date=start_date,
                     end_date=end_date,
-                    interval="1d"
+                    interval="1d",
+                    meta_out=meta
                 )
 
                 if not prices_raw:
@@ -340,9 +347,12 @@ class YahooFinanceService:
                 else:
                     change_pct = 0.0
 
+                # Use longName > shortName > symbol as display name
+                name = meta.get('longName') or meta.get('shortName') or symbol
+
                 results[symbol] = {
                     'symbol': symbol,
-                    'name': symbol,  # Name will be set later if needed
+                    'name': name,
                     'price': latest['close'],
                     'change_percent': change_pct,
                     'volume': latest['volume'],

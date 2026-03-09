@@ -359,20 +359,22 @@ export default function Chart({ data, selectedStock, isDark = false, activeIndic
     <div className="h-full flex flex-col bg-dark-card overflow-hidden">
       {/* Chart header */}
       <div className="flex items-center gap-4 px-4 py-2 border-b border-dark-border shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-dark-text font-semibold text-lg">
-            {selectedStock?.symbol || 'Select a stock'}
-          </span>
-          {selectedStock && (
-            <>
-              <span className="text-dark-muted text-sm">{selectedStock.name}</span>
+        <div className="flex flex-col justify-center">
+          <div className="flex items-center gap-2">
+            <span className="text-dark-text font-semibold text-lg leading-tight">
+              {selectedStock?.symbol || 'Select a stock'}
+            </span>
+            {selectedStock && (
               <span className={`text-sm font-semibold ${
                 selectedStock.change_percent >= 0 ? 'text-green-profit' : 'text-red-loss'
               }`}>
                 {selectedStock.change_percent >= 0 ? '+' : ''}
                 {selectedStock.change_percent.toFixed(2)}%
               </span>
-            </>
+            )}
+          </div>
+          {selectedStock && selectedStock.name !== selectedStock.symbol && (
+            <span className="text-dark-muted text-xs leading-tight">{selectedStock.name}</span>
           )}
         </div>
 
