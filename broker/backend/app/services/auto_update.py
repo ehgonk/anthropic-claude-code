@@ -286,14 +286,17 @@ class AutoUpdateService:
 
     async def update_recent_data(self, db: AsyncSession) -> Dict[str, Any]:
         """
-        Busca dados recentes do Yahoo Finance: do last_date+1 ate ontem.
+        Busca dados recentes do Yahoo Finance: do last_date+1 ate hoje (D0).
         Sempre chamado primeiro no run_update para garantir dados atualizados.
-        last_date no banco deve ser sempre hoje-1 (ultimo dia util).
+        D0 retorna candle parcial (preco com delay ~15min) durante o pregao,
+        e candle fechado apos o encerramento do pregao.
+        Para D0, faz upsert (atualiza se ja existir) para refletir o preco mais recente.
         """
         from datetime import date as date_type, timedelta as td
 
         last_date_str = await self.get_last_date(db)
-        yesterday = date_type.today() - td(days=1)
+        today = date_type.today()
+        today_str = today.isoformat()
 
         if not last_date_str:
             logger.info("Sem dados no banco, pulando update recente")
@@ -301,14 +304,14 @@ class AutoUpdateService:
 
         last_dt = date_type.fromisoformat(last_date_str)
 
-        if last_dt >= yesterday:
-            logger.info(f"Dados recentes OK (last: {last_date_str}, ontem: {yesterday})")
+        if last_dt > today:
+            logger.info(f"Dados recentes OK (last: {last_date_str})")
             return {"stocks": 0, "prices": 0}
 
         start_date = datetime.combine(last_dt + td(days=1), datetime.min.time())
-        end_date = datetime.combine(yesterday, datetime.max.time())
+        end_date = datetime.combine(today, datetime.max.time())
 
-        logger.info(f"Buscando dados recentes: {start_date.date()} ate {end_date.date()}")
+        logger.info(f"Buscando dados recentes: {start_date.date()} ate {end_date.date()} (inclui D0 parcial)")
 
         stock_records = await yahoo_finance_service.fetch_stock_data(
             symbols=ALL_STOCKS,
@@ -336,14 +339,25 @@ class AutoUpdateService:
                 stock.updated_at = datetime.utcnow()
 
             for price_data in stock_data['prices']:
-                existing = await db.execute(
+                existing_row = (await db.execute(
                     select(StockPrice).where(
                         StockPrice.stock_id == stock.id,
                         StockPrice.date == price_data['date']
                     )
-                )
-                if existing.scalar_one_or_none():
+                )).scalar_one_or_none()
+
+                if existing_row:
+                    # D0: sempre atualizar com dados mais recentes (preco com delay ~15min)
+                    if price_data['date'] == today_str:
+                        existing_row.open = price_data['open']
+                        existing_row.high = price_data['high']
+                        existing_row.low = price_data['low']
+                        existing_row.close = price_data['close']
+                        existing_row.volume = price_data['volume']
+                        total_prices += 1
+                    # Dias anteriores: dados finais, nao sobrescrever
                     continue
+
                 db.add(StockPrice(
                     stock_id=stock.id,
                     symbol=stock.symbol,
@@ -359,7 +373,7 @@ class AutoUpdateService:
             stocks_updated += 1
 
         await db.commit()
-        logger.info(f"Update recente: {stocks_updated} acoes, {total_prices} precos novos (ate {yesterday})")
+        logger.info(f"Update recente: {stocks_updated} acoes, {total_prices} precos novos/atualizados (ate D0: {today_str})")
         return {"stocks": stocks_updated, "prices": total_prices}
 
     async def update_year(self, db: AsyncSession, year: int) -> Dict[str, Any]:
