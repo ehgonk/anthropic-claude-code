@@ -83,14 +83,37 @@ const lightChartTheme = {
   crosshairLabel: '#dde1ed',
 }
 
+interface HoveredCandle {
+  time: string
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+  prevClose: number | null
+}
+
+function fmtBR(value: number, decimals = 2): string {
+  return value.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+}
+
+function fmtVolume(vol: number): string {
+  if (vol >= 1_000_000_000) return (vol / 1_000_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'B'
+  if (vol >= 1_000_000) return (vol / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'M'
+  if (vol >= 1_000) return (vol / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'K'
+  return vol.toLocaleString('pt-BR')
+}
+
 export default function Chart({ data, selectedStock, isDark = false, activeIndicators = [] }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
+  const aggregatedDataRef = useRef<CandleData[]>([])
   const [period, setPeriod] = useState<ChartPeriod>('1D')
   const [chartReady, setChartReady] = useState(false)
+  const [hoveredCandle, setHoveredCandle] = useState<HoveredCandle | null>(null)
 
   // Create chart once container is mounted
   useEffect(() => {
@@ -153,6 +176,31 @@ export default function Chart({ data, selectedStock, isDark = false, activeIndic
     chartRef.current = chart
     candlestickSeriesRef.current = candlestickSeries
     volumeSeriesRef.current = volumeSeries
+
+    chart.subscribeCrosshairMove((param) => {
+      if (!param.time || !param.point || param.point.x < 0 || param.point.y < 0) {
+        setHoveredCandle(null)
+        return
+      }
+      const timeStr = String(param.time)
+      const arr = aggregatedDataRef.current
+      const idx = arr.findIndex(c => c.time === timeStr)
+      if (idx >= 0) {
+        const c = arr[idx]
+        setHoveredCandle({
+          time: c.time,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+          volume: c.volume,
+          prevClose: idx > 0 ? arr[idx - 1].close : null,
+        })
+      } else {
+        setHoveredCandle(null)
+      }
+    })
+
     setChartReady(true)
 
     // Manual resize observer for reliable sizing
@@ -203,6 +251,7 @@ export default function Chart({ data, selectedStock, isDark = false, activeIndic
     if (!chartReady || !candlestickSeriesRef.current || !volumeSeriesRef.current || data.length === 0) return
 
     const aggregated = aggregateCandles(data, period)
+    aggregatedDataRef.current = aggregated
 
     const candleData: CandlestickData[] = aggregated.map((d) => ({
       time: d.time,
@@ -344,6 +393,26 @@ export default function Chart({ data, selectedStock, isDark = false, activeIndic
           ))}
         </div>
       </div>
+
+      {/* OHLCV hover bar */}
+      {hoveredCandle && (() => {
+        const diff = hoveredCandle.prevClose !== null
+          ? hoveredCandle.close - hoveredCandle.prevClose
+          : hoveredCandle.close - hoveredCandle.open
+        const base = hoveredCandle.prevClose !== null ? hoveredCandle.prevClose : hoveredCandle.open
+        const pct = base !== 0 ? (diff / base) * 100 : 0
+        const diffColor = diff >= 0 ? 'text-green-profit' : 'text-red-loss'
+        return (
+          <div className="flex items-center gap-3 px-3 py-0.5 text-xs border-b border-dark-border shrink-0 flex-wrap">
+            <span className="text-dark-muted">Abr <span className="text-dark-text">{fmtBR(hoveredCandle.open)}</span></span>
+            <span className="text-dark-muted">Máx. <span className="text-green-profit">{fmtBR(hoveredCandle.high)}</span></span>
+            <span className="text-dark-muted">Mín. <span className="text-red-loss">{fmtBR(hoveredCandle.low)}</span></span>
+            <span className="text-dark-muted">Fch <span className="text-dark-text">{fmtBR(hoveredCandle.close)}</span></span>
+            <span className={diffColor}>{diff >= 0 ? '+' : ''}{fmtBR(diff)} ({diff >= 0 ? '+' : ''}{fmtBR(pct)}%)</span>
+            <span className="text-dark-muted">Vol <span className="text-dark-text">{fmtVolume(hoveredCandle.volume)}</span></span>
+          </div>
+        )
+      })()}
 
       {/* Chart container - uses absolute fill for reliable dimensions */}
       <div className="flex-1 relative min-h-0">
