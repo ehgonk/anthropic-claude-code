@@ -139,16 +139,6 @@ class AutoUpdateService:
                 logger.warning(f"⚠️ Year {year} has only {year_stats[year]} records, marking for re-download")
                 missing_years.append(year)
 
-        # Check if recent data is stale (last date more than 3 days old)
-        last_date = await self.get_last_date(db)
-        if last_date:
-            from datetime import date as date_type
-            last_dt = date_type.fromisoformat(last_date)
-            days_stale = (date_type.today() - last_dt).days
-            if days_stale > 3 and current_year not in missing_years:
-                logger.info(f"Recent data is stale (last: {last_date}, {days_stale} days ago), adding {current_year} for update")
-                missing_years.append(current_year)
-
         if missing_years:
             logger.info(f"Found {len(missing_years)} missing/incomplete years: {missing_years[:5]}{'...' if len(missing_years) > 5 else ''}")
         else:
@@ -294,26 +284,102 @@ class AutoUpdateService:
             "prices": total_prices
         }
 
-    async def update_year(self, db: AsyncSession, year: int) -> Dict[str, Any]:
+    async def update_recent_data(self, db: AsyncSession) -> Dict[str, Any]:
         """
-        Update data for a specific year using Investing.com
+        Busca dados recentes do Yahoo Finance: do last_date+1 ate ontem.
+        Sempre chamado primeiro no run_update para garantir dados atualizados.
+        last_date no banco deve ser sempre hoje-1 (ultimo dia util).
+        """
+        from datetime import date as date_type, timedelta as td
 
-        Returns statistics about the update
-        """
+        last_date_str = await self.get_last_date(db)
+        yesterday = date_type.today() - td(days=1)
+
+        if not last_date_str:
+            logger.info("Sem dados no banco, pulando update recente")
+            return {"stocks": 0, "prices": 0}
+
+        last_dt = date_type.fromisoformat(last_date_str)
+
+        if last_dt >= yesterday:
+            logger.info(f"Dados recentes OK (last: {last_date_str}, ontem: {yesterday})")
+            return {"stocks": 0, "prices": 0}
+
+        start_date = datetime.combine(last_dt + td(days=1), datetime.min.time())
+        end_date = datetime.combine(yesterday, datetime.max.time())
+
+        logger.info(f"Buscando dados recentes: {start_date.date()} ate {end_date.date()}")
+
+        stock_records = await yahoo_finance_service.fetch_stock_data(
+            symbols=ALL_STOCKS,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        if not stock_records:
+            logger.info("Nenhum dado recente encontrado no Yahoo Finance")
+            return {"stocks": 0, "prices": 0}
+
+        total_prices = 0
+        stocks_updated = 0
+
+        for symbol, stock_data in stock_records.items():
+            result = await db.execute(select(Stock).where(Stock.symbol == symbol))
+            stock = result.scalar_one_or_none()
+            if not stock:
+                continue
+
+            if stock_data.get('price'):
+                stock.price = stock_data['price']
+                stock.change_percent = stock_data.get('change_percent', 0)
+                stock.volume = stock_data.get('volume', 0)
+                stock.updated_at = datetime.utcnow()
+
+            for price_data in stock_data['prices']:
+                existing = await db.execute(
+                    select(StockPrice).where(
+                        StockPrice.stock_id == stock.id,
+                        StockPrice.date == price_data['date']
+                    )
+                )
+                if existing.scalar_one_or_none():
+                    continue
+                db.add(StockPrice(
+                    stock_id=stock.id,
+                    symbol=stock.symbol,
+                    date=price_data['date'],
+                    open=price_data['open'],
+                    high=price_data['high'],
+                    low=price_data['low'],
+                    close=price_data['close'],
+                    volume=price_data['volume'],
+                ))
+                total_prices += 1
+
+            stocks_updated += 1
+
+        await db.commit()
+        logger.info(f"Update recente: {stocks_updated} acoes, {total_prices} precos novos (ate {yesterday})")
+        return {"stocks": stocks_updated, "prices": total_prices}
+
+    async def update_year(self, db: AsyncSession, year: int) -> Dict[str, Any]:
+        """Update data for a specific year"""
         result = await self.update_year_range(db, year, year)
         result["year"] = year
         return result
 
     async def run_update(self, force: bool = False, full_historical: bool = False) -> Dict[str, Any]:
         """
-        Run the auto-update process with sequential batching
+        Run the auto-update process.
+
+        Sempre executa em duas fases:
+        1. update_recent_data: busca do last_date+1 ate ontem no Yahoo Finance
+           (garante que last_date == hoje-1 apos o update)
+        2. get_missing_years: preenche anos historicos faltando desde HISTORICAL_START_YEAR
 
         Args:
             force: If True, re-download existing data
-            full_historical: If True, download ALL data from 1994 to now
-
-        Returns:
-            Statistics about the update
+            full_historical: If True, download ALL data from HISTORICAL_START_YEAR to now
         """
         if self.status.is_running:
             raise RuntimeError("Update is already running")
@@ -330,7 +396,10 @@ class AutoUpdateService:
             }
 
             async with AsyncSessionLocal() as db:
-                # Get years to update
+                # FASE 1: sempre atualizar dados recentes (last_date+1 ate ontem)
+                recent_result = await self.update_recent_data(db)
+
+                # FASE 2: verificar e preencher anos historicos faltando
                 years = await self.get_missing_years(db, force_full=full_historical or force)
 
                 if not years:
@@ -338,8 +407,8 @@ class AutoUpdateService:
                         "status": "up_to_date",
                         "message": f"Data is complete from {HISTORICAL_START_YEAR} to {datetime.now().year}",
                         "years": 0,
-                        "stocks": 0,
-                        "prices": 0,
+                        "stocks": recent_result["stocks"],
+                        "prices": recent_result["prices"],
                         "ibovespa": ibov_result
                     }
                     self.status.finish_run(success=True, stats=stats)
