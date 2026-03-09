@@ -304,11 +304,10 @@ class AutoUpdateService:
 
         last_dt = date_type.fromisoformat(last_date_str)
 
-        if last_dt > today:
-            logger.info(f"Dados recentes OK (last: {last_date_str})")
-            return {"stocks": 0, "prices": 0}
-
-        start_date = datetime.combine(last_dt + td(days=1), datetime.min.time())
+        # Sempre busca ate hoje (D0). Se last_dt >= today, apenas atualiza D0 (upsert).
+        # Se last_dt < today, busca dias faltando + D0.
+        fetch_from = min(last_dt + td(days=1), today)
+        start_date = datetime.combine(fetch_from, datetime.min.time())
         end_date = datetime.combine(today, datetime.max.time())
 
         logger.info(f"Buscando dados recentes: {start_date.date()} ate {end_date.date()} (inclui D0 parcial)")
