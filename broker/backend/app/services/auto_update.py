@@ -139,10 +139,20 @@ class AutoUpdateService:
                 logger.warning(f"⚠️ Year {year} has only {year_stats[year]} records, marking for re-download")
                 missing_years.append(year)
 
+        # Check if recent data is stale (last date more than 3 days old)
+        last_date = await self.get_last_date(db)
+        if last_date:
+            from datetime import date as date_type
+            last_dt = date_type.fromisoformat(last_date)
+            days_stale = (date_type.today() - last_dt).days
+            if days_stale > 3 and current_year not in missing_years:
+                logger.info(f"Recent data is stale (last: {last_date}, {days_stale} days ago), adding {current_year} for update")
+                missing_years.append(current_year)
+
         if missing_years:
-            logger.info(f"📊 Found {len(missing_years)} missing/incomplete years: {missing_years[:5]}{'...' if len(missing_years) > 5 else ''}")
+            logger.info(f"Found {len(missing_years)} missing/incomplete years: {missing_years[:5]}{'...' if len(missing_years) > 5 else ''}")
         else:
-            logger.info(f"✅ All years from {HISTORICAL_START_YEAR} to {current_year} are present")
+            logger.info(f"All years from {HISTORICAL_START_YEAR} to {current_year} are present and up to date")
 
         return missing_years
 
@@ -162,7 +172,7 @@ class AutoUpdateService:
         batches = []
         current_batch = []
 
-        for year in sorted(years):
+        for year in years:
             current_batch.append(year)
             if len(current_batch) >= BATCH_SIZE_YEARS:
                 batches.append(current_batch)
@@ -261,6 +271,7 @@ class AutoUpdateService:
 
                 stock_price = StockPrice(
                     stock_id=stock.id,
+                    symbol=stock.symbol,
                     date=price_data['date'],
                     open=price_data['open'],
                     high=price_data['high'],
@@ -334,8 +345,14 @@ class AutoUpdateService:
                     self.status.finish_run(success=True, stats=stats)
                     return stats
 
-                # Create batches for sequential download
-                batches = self.create_year_batches(years)
+                # Prioritize current/recent years as individual batches first
+                current_year = datetime.now().year
+                recent_years = sorted([y for y in years if y >= current_year - 1], reverse=True)
+                old_years = sorted([y for y in years if y < current_year - 1])
+
+                recent_batches = [[y] for y in recent_years]
+                old_batches = self.create_year_batches(old_years)
+                batches = recent_batches + old_batches
 
                 total_stocks = 0
                 total_prices = 0

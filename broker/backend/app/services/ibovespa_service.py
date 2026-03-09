@@ -104,6 +104,7 @@ class IbovespaService:
                 if record['date'] not in existing_dates:
                     price = StockPrice(
                         stock_id=stock.id,
+                        symbol=stock.symbol,
                         date=record['date'].strftime("%Y-%m-%d"),
                         open=record['open'],
                         high=record['high'],

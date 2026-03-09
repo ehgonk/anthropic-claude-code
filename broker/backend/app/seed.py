@@ -108,6 +108,7 @@ async def seed_with_yahoo_finance(days: int = 365):
                 for price_data in stock_data['prices']:
                     stock_price = StockPrice(
                         stock_id=stock.id,
+                        symbol=stock.symbol,
                         date=price_data['date'],
                         open=price_data['open'],
                         high=price_data['high'],
