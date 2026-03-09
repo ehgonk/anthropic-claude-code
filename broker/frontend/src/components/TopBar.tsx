@@ -19,7 +19,7 @@ export default function TopBar({ selectedStock, lastUpdateDate, isUpdating, upda
           <Menu className="w-5 h-5 text-dark-muted" />
         </button>
 
-        <span className="text-lg font-bold text-dark-text">Broker</span>
+        <span className="text-lg font-bold text-dark-text">Dojima</span>
 
         {selectedStock && (
           <div className="flex items-center gap-3 ml-4 pl-4 border-l border-dark-border">
