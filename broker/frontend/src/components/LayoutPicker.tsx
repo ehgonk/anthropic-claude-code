@@ -1,11 +1,19 @@
 import { useState, useRef, useEffect } from 'react'
 import { LayoutGrid } from 'lucide-react'
 
+export interface PanelDef {
+  colStart: number
+  colEnd: number
+  rowStart: number
+  rowEnd: number
+}
+
 export interface GridLayout {
   id: string
   cols: number
   rows: number
   label: string
+  panels?: PanelDef[]  // custom panel placement; if set, overrides simple grid
 }
 
 export const LAYOUTS: GridLayout[] = [
@@ -17,6 +25,18 @@ export const LAYOUTS: GridLayout[] = [
   // 3 panels
   { id: '3x1', cols: 3, rows: 1, label: '3' },
   { id: '1x3', cols: 1, rows: 3, label: '3' },
+  // 3 panels: esquerda dividida (2x 1/4) + direita grande (1/2)
+  {
+    id: '3-left2-right1',
+    cols: 2,
+    rows: 2,
+    label: '3',
+    panels: [
+      { colStart: 1, colEnd: 2, rowStart: 1, rowEnd: 2 }, // topo-esquerda (1/4)
+      { colStart: 1, colEnd: 2, rowStart: 2, rowEnd: 3 }, // baixo-esquerda (1/4)
+      { colStart: 2, colEnd: 3, rowStart: 1, rowEnd: 3 }, // direita (1/2)
+    ],
+  },
   // 4 panels
   { id: '2x2', cols: 2, rows: 2, label: '4' },
   { id: '4x1', cols: 4, rows: 1, label: '4' },
@@ -39,8 +59,38 @@ export const LAYOUTS: GridLayout[] = [
 // Group layouts by total panel count
 const GROUPS = [1, 2, 3, 4, 6, 8, 9, 12, 16]
 
-function MiniGrid({ cols, rows, active }: { cols: number; rows: number; active: boolean }) {
-  const cells = cols * rows
+function MiniGrid({ layout, active }: { layout: GridLayout; active: boolean }) {
+  const { cols, rows, panels } = layout
+  const color = active ? 'bg-blue-500/40' : 'bg-dark-border/60 hover:bg-dark-muted/40'
+
+  if (panels) {
+    return (
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${cols}, 1fr)`,
+          gridTemplateRows: `repeat(${rows}, 1fr)`,
+          gap: '1px',
+          width: 28,
+          height: 20,
+          flexShrink: 0,
+        }}
+        className={`rounded-sm overflow-hidden border ${active ? 'border-blue-500' : 'border-dark-border'}`}
+      >
+        {panels.map((p, i) => (
+          <div
+            key={i}
+            style={{
+              gridColumn: `${p.colStart} / ${p.colEnd}`,
+              gridRow: `${p.rowStart} / ${p.rowEnd}`,
+            }}
+            className={color}
+          />
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -54,11 +104,8 @@ function MiniGrid({ cols, rows, active }: { cols: number; rows: number; active: 
       }}
       className={`rounded-sm overflow-hidden border ${active ? 'border-blue-500' : 'border-dark-border'}`}
     >
-      {Array.from({ length: cells }).map((_, i) => (
-        <div
-          key={i}
-          className={active ? 'bg-blue-500/40' : 'bg-dark-border/60 hover:bg-dark-muted/40'}
-        />
+      {Array.from({ length: cols * rows }).map((_, i) => (
+        <div key={i} className={color} />
       ))}
     </div>
   )
@@ -72,6 +119,7 @@ interface LayoutPickerProps {
 export default function LayoutPicker({ layout, onSelect }: LayoutPickerProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const totalPanels = layout.panels?.length ?? layout.cols * layout.rows
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -94,9 +142,9 @@ export default function LayoutPicker({ layout, onSelect }: LayoutPickerProps) {
             : 'text-dark-muted hover:text-dark-text hover:bg-dark-border'
         }`}
       >
-        <MiniGrid cols={layout.cols} rows={layout.rows} active={false} />
+        <MiniGrid layout={layout} active={false} />
         <LayoutGrid className="w-3.5 h-3.5" />
-        <span>{layout.cols * layout.rows} Tela{layout.cols * layout.rows > 1 ? 's' : ''}</span>
+        <span>{totalPanels} Tela{totalPanels > 1 ? 's' : ''}</span>
       </button>
 
       {open && (
@@ -104,7 +152,7 @@ export default function LayoutPicker({ layout, onSelect }: LayoutPickerProps) {
           <div className="text-dark-muted text-xs mb-2 font-medium">Selecionar layout</div>
           <div className="space-y-1">
             {GROUPS.map(count => {
-              const group = LAYOUTS.filter(l => l.cols * l.rows === count)
+              const group = LAYOUTS.filter(l => (l.panels?.length ?? l.cols * l.rows) === count)
               if (group.length === 0) return null
               return (
                 <div key={count} className="flex items-center gap-2">
@@ -117,7 +165,7 @@ export default function LayoutPicker({ layout, onSelect }: LayoutPickerProps) {
                         title={`${l.cols}×${l.rows}`}
                         className="hover:opacity-80 transition-opacity"
                       >
-                        <MiniGrid cols={l.cols} rows={l.rows} active={layout.id === l.id} />
+                        <MiniGrid layout={l} active={layout.id === l.id} />
                       </button>
                     ))}
                   </div>

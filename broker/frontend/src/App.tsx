@@ -218,7 +218,7 @@ function App() {
     )
   }
 
-  const totalPanels = layout.cols * layout.rows
+  const totalPanels = layout.panels?.length ?? layout.cols * layout.rows
 
   return (
     <div className="flex flex-col h-screen bg-dark-bg">
@@ -310,7 +310,7 @@ function App() {
             <LayoutPicker layout={layout} onSelect={(l) => {
               setLayout(l)
               // keep activePanel within bounds
-              if (activePanel >= l.cols * l.rows) setActivePanel(0)
+              if (activePanel >= (l.panels?.length ?? l.cols * l.rows)) setActivePanel(0)
             }} />
           </div>
 
@@ -323,20 +323,27 @@ function App() {
               gridTemplateRows: `repeat(${layout.rows}, 1fr)`,
             }}
           >
-            {Array.from({ length: totalPanels }).map((_, i) => (
-              <div
-                key={i}
-                onClick={() => setActivePanel(i)}
-                className={`relative min-w-0 min-h-0 overflow-hidden ${activePanel === i && totalPanels > 1 ? 'ring-1 ring-inset ring-blue-500/50' : ''}`}
-              >
-                <Chart
-                  data={panels[i].candleData}
-                  selectedStock={panels[i].stock}
-                  isDark={isDark}
-                  activeIndicators={activeIndicators}
-                />
-              </div>
-            ))}
+            {Array.from({ length: totalPanels }).map((_, i) => {
+              const panelDef = layout.panels?.[i]
+              return (
+                <div
+                  key={i}
+                  onClick={() => setActivePanel(i)}
+                  style={panelDef ? {
+                    gridColumn: `${panelDef.colStart} / ${panelDef.colEnd}`,
+                    gridRow: `${panelDef.rowStart} / ${panelDef.rowEnd}`,
+                  } : undefined}
+                  className={`relative min-w-0 min-h-0 overflow-hidden ${activePanel === i && totalPanels > 1 ? 'ring-1 ring-inset ring-blue-500/50' : ''}`}
+                >
+                  <Chart
+                    data={panels[i].candleData}
+                    selectedStock={panels[i].stock}
+                    isDark={isDark}
+                    activeIndicators={activeIndicators}
+                  />
+                </div>
+              )
+            })}
           </div>
         </div>
 
