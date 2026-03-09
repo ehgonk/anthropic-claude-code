@@ -491,6 +491,28 @@ class AutoUpdateService:
             self.status.finish_run(success=False, error=error_msg)
             raise
 
+    async def run_recent_data_only(self) -> Dict[str, Any]:
+        """
+        Lightweight D0 update — only fetches last_date+1 to today.
+        Used by the 15-minute scheduler; skips if a full update is already running.
+        """
+        if self.status.is_running:
+            logger.info("Full update running, skipping 15-min D0 update")
+            return {"skipped": True, "stocks": 0, "prices": 0}
+
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await self.update_recent_data(db)
+
+            if result.get("prices", 0) > 0 or result.get("stocks", 0) > 0:
+                self.status.last_success = datetime.utcnow()
+
+            logger.info(f"15-min D0 update: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"15-min D0 update failed: {e}", exc_info=True)
+            return {"error": str(e), "stocks": 0, "prices": 0}
+
     def get_status(self) -> Dict[str, Any]:
         """Get current update status"""
         return self.status.to_dict()

@@ -123,6 +123,25 @@ function App() {
     initializeApp()
   }, [])
 
+  // Poll every 15 minutes to refresh stocks + last-update timestamp (D0 data)
+  useEffect(() => {
+    const refreshD0 = async () => {
+      try {
+        const [stocksData, lastUpdate] = await Promise.all([
+          api.getStocks(),
+          api.getLastUpdateDate(),
+        ])
+        setStocks(stocksData)
+        setLastB3Date(lastUpdate.last_update)
+      } catch (error) {
+        console.error('❌ Error refreshing D0 data:', error)
+      }
+    }
+
+    const interval = setInterval(refreshD0, 15 * 60 * 1000) // 15 minutes
+    return () => clearInterval(interval)
+  }, [])
+
   // Load candle data when panel stocks change
   useEffect(() => {
     panels.forEach((panel, index) => {
@@ -339,6 +358,16 @@ function App() {
                     selectedStock={panels[i].stock}
                     isDark={isDark}
                     activeIndicators={activeIndicators}
+                    stocks={stocks}
+                    onStockSelect={(stock) => {
+                      setActivePanel(i)
+                      setPanels(prev => {
+                        const updated = [...prev]
+                        updated[i] = { stock, candleData: [] }
+                        return updated
+                      })
+                      loadCandleData(stock.symbol, i)
+                    }}
                   />
                 </div>
               )

@@ -13,6 +13,7 @@ from .api.update import router as update_router
 from .api.ibovespa import router as ibovespa_router
 from .api.admin import router as admin_router
 from .services.auto_update import AutoUpdateService
+from .scheduler import scheduler
 from .logging_config import setup_logging
 import logging
 
@@ -41,10 +42,13 @@ async def lifespan(app: FastAPI):
     import asyncio
     asyncio.create_task(startup_update())
 
+    # Start 15-min D0 scheduler
+    scheduler.start()
+
     yield
 
     # Shutdown
-    pass
+    scheduler.stop()
 
 
 app = FastAPI(

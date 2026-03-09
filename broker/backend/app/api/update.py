@@ -83,32 +83,43 @@ async def run_update_sync(force: bool = False):
 @router.get("/last-update-date")
 async def get_last_update_date():
     """
-    Get the last update date formatted as dd/mm/yyyy
+    Get the last update date formatted as dd/mm/yyyy HH:MM (BRT).
 
-    Returns the date of the most recent successful update in Brazilian date format.
+    Returns the date of the most recent candle plus the time the data was last fetched.
     Used by frontend to display in the headline.
     """
     from ..database import AsyncSessionLocal
-    from ..models import StockPrice
+    from ..models import Stock, StockPrice
     from sqlalchemy import select, func
-    from datetime import datetime
+    from datetime import datetime, timezone, timedelta
+
+    BRT = timezone(timedelta(hours=-3))
 
     async with AsyncSessionLocal() as db:
-        # Get the most recent date in the database
         result = await db.execute(select(func.max(StockPrice.date)))
         last_date = result.scalar()
 
         if last_date:
-            # Convert string to date if needed
             if isinstance(last_date, str):
                 date_obj = datetime.strptime(last_date, "%Y-%m-%d").date()
             else:
                 date_obj = last_date
 
-            # Format as dd/mm/yyyy
             formatted_date = date_obj.strftime("%d/%m/%Y")
+
+            # Use max(Stock.updated_at) as last-fetched time — persists across restarts
+            result_time = await db.execute(select(func.max(Stock.updated_at)))
+            last_fetched: datetime | None = result_time.scalar()
+
+            if last_fetched:
+                brt_time = last_fetched.replace(tzinfo=timezone.utc).astimezone(BRT)
+                time_str = brt_time.strftime("%H:%M")
+                formatted = f"{formatted_date} {time_str}"
+            else:
+                formatted = formatted_date
+
             return {
-                "last_update": formatted_date,
+                "last_update": formatted,
                 "raw_date": str(date_obj)
             }
         else:

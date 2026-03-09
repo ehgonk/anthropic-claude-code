@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react'
+import { Search, ChevronRight, ChevronUp, ChevronDown, X } from 'lucide-react'
 import type { Stock } from '../App'
 
 interface StockListProps {
@@ -84,11 +84,19 @@ export default function StockList({ stocks, selectedStock, onStockSelect }: Stoc
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-muted" />
           <input
             type="text"
-            placeholder="Pesquisar..."
+            placeholder="Pesquisar símbolo"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            className="w-full pl-10 pr-3 py-2 bg-dark-bg border border-dark-border rounded text-sm text-dark-text placeholder-dark-muted focus:outline-none focus:border-dark-muted"
+            className="w-full pl-10 pr-8 py-2 bg-dark-bg border border-dark-border rounded text-sm text-dark-text placeholder-dark-muted focus:outline-none focus:border-dark-muted"
           />
+          {query && (
+            <button
+              onClick={() => setQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-dark-muted hover:text-dark-text transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
         <button
           onClick={() => setCollapsed(true)}
@@ -130,8 +138,8 @@ export default function StockList({ stocks, selectedStock, onStockSelect }: Stoc
               }`}
             >
               <div className="col-span-4 flex flex-col min-w-0">
-                <span className="text-dark-text text-sm font-medium">{stock.symbol}</span>
-                <span className="text-dark-muted text-xs truncate">{stock.name}</span>
+                <span className="text-dark-text text-sm font-medium leading-tight">{stock.symbol}</span>
+                <span className="text-dark-muted text-xs truncate leading-tight min-h-[1rem]">{stock.name}</span>
               </div>
 
               <div className="col-span-3 flex items-center justify-center">

@@ -52,8 +52,17 @@ class UpdateScheduler:
             replace_existing=True
         )
 
+        # Add 15-minute D0 update job (market hours only: 09:00-18:30 BRT)
+        self.scheduler.add_job(
+            self._run_recent_update,
+            trigger=CronTrigger(minute="*/15", hour="9-18", timezone=timezone),
+            id="recent_d0_update",
+            name="D0 Stock Update (15min)",
+            replace_existing=True
+        )
+
         self.scheduler.start()
-        logger.info(f"Scheduler started - daily updates at {hour:02d}:{minute:02d} {timezone}")
+        logger.info(f"Scheduler started - daily at {hour:02d}:{minute:02d}, D0 every 15min during market hours ({timezone})")
 
     def stop(self):
         """Stop the scheduler"""
@@ -70,6 +79,15 @@ class UpdateScheduler:
             logger.info(f"Scheduled update completed: {result}")
         except Exception as e:
             logger.error(f"Scheduled update failed: {e}", exc_info=True)
+
+    async def _run_recent_update(self):
+        """Run lightweight D0 update every 15 minutes"""
+        try:
+            result = await auto_update_service.run_recent_data_only()
+            if not result.get("skipped"):
+                logger.info(f"15-min D0 update: {result}")
+        except Exception as e:
+            logger.error(f"15-min D0 update failed: {e}", exc_info=True)
 
     def get_next_run_time(self) -> Optional[str]:
         """Get the next scheduled run time"""

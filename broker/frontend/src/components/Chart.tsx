@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createChart, IChartApi, ISeriesApi, CandlestickData, HistogramData, LineData } from 'lightweight-charts'
+import { X } from 'lucide-react'
 import type { Stock, CandleData } from '../App'
 import { calculateSMA, calculateEMA } from '../utils/indicators'
 
@@ -10,6 +11,8 @@ interface ChartProps {
   selectedStock: Stock | null
   isDark?: boolean
   activeIndicators?: string[]
+  stocks?: Stock[]
+  onStockSelect?: (stock: Stock) => void
 }
 
 function aggregateCandles(dailyData: CandleData[], period: ChartPeriod): CandleData[] {
@@ -104,7 +107,7 @@ function fmtVolume(vol: number): string {
   return vol.toLocaleString('pt-BR')
 }
 
-export default function Chart({ data, selectedStock, isDark = false, activeIndicators = [] }: ChartProps) {
+export default function Chart({ data, selectedStock, isDark = false, activeIndicators = [], stocks = [], onStockSelect }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
@@ -114,6 +117,8 @@ export default function Chart({ data, selectedStock, isDark = false, activeIndic
   const [period, setPeriod] = useState<ChartPeriod>('1D')
   const [chartReady, setChartReady] = useState(false)
   const [hoveredCandle, setHoveredCandle] = useState<HoveredCandle | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isSearching, setIsSearching] = useState(false)
 
   // Create chart once container is mounted
   useEffect(() => {
@@ -135,7 +140,7 @@ export default function Chart({ data, selectedStock, isDark = false, activeIndic
         horzLines: { color: theme.grid },
       },
       timeScale: {
-        timeVisible: true,
+        timeVisible: false,
         secondsVisible: false,
         borderColor: theme.border,
       },
@@ -358,27 +363,82 @@ export default function Chart({ data, selectedStock, isDark = false, activeIndic
   return (
     <div className="h-full flex flex-col bg-dark-card overflow-hidden">
       {/* Chart header */}
-      <div className="flex items-center gap-4 px-4 py-2 border-b border-dark-border shrink-0">
-        <div className="flex flex-col justify-center">
-          <div className="flex items-center gap-2">
-            <span className="text-dark-text font-semibold text-lg leading-tight">
-              {selectedStock?.symbol || 'Select a stock'}
-            </span>
-            {selectedStock && (
-              <span className={`text-sm font-semibold ${
-                selectedStock.change_percent >= 0 ? 'text-green-profit' : 'text-red-loss'
-              }`}>
-                {selectedStock.change_percent >= 0 ? '+' : ''}
-                {selectedStock.change_percent.toFixed(2)}%
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-dark-border shrink-0 min-h-[3rem]">
+        <div className="flex flex-col justify-center min-w-0 flex-1">
+          {(!selectedStock || isSearching) ? (
+            <div>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Pesquisar símbolo"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  autoFocus={isSearching || !selectedStock}
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') { setSearchQuery(''); if (selectedStock) setIsSearching(false) }
+                  }}
+                  className="pl-2 pr-7 py-1 bg-dark-bg border border-dark-border rounded text-sm text-dark-text placeholder-dark-muted focus:outline-none focus:border-dark-muted w-44"
+                />
+                {(searchQuery || (isSearching && selectedStock)) && (
+                  <button
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => { setSearchQuery(''); if (selectedStock) setIsSearching(false) }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-dark-muted hover:text-dark-text"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+                {searchQuery && (
+                  <div className="absolute top-full left-0 mt-1 w-64 bg-dark-card border border-dark-border rounded shadow-lg z-[100] max-h-48 overflow-y-auto">
+                    {stocks
+                      .filter(s =>
+                        s.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        s.name.toLowerCase().includes(searchQuery.toLowerCase())
+                      )
+                      .slice(0, 10)
+                      .map(s => (
+                        <div
+                          key={s.symbol}
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => { onStockSelect?.(s); setSearchQuery(''); setIsSearching(false) }}
+                          className="px-3 py-2 cursor-pointer hover:bg-dark-border/50 flex items-center gap-2"
+                        >
+                          <span className="text-dark-text text-sm font-medium flex-shrink-0">{s.symbol}</span>
+                          <span className="text-dark-muted text-xs truncate">{s.name}</span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+              {/* Spacer matching company-name line in stock-selected state */}
+              <div className="h-[1rem]" />
+            </div>
+          ) : (
+            <div
+              className="cursor-pointer hover:opacity-80 min-w-0 overflow-hidden"
+              onClick={() => setIsSearching(true)}
+              title="Clique para trocar ticker"
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-dark-text font-semibold text-lg leading-tight flex-shrink-0">
+                  {selectedStock.symbol}
+                </span>
+                <span className="text-dark-muted text-xs font-medium flex-shrink-0">R$ {fmtBR(selectedStock.price)}</span>
+                <span className={`text-xs font-semibold flex-shrink-0 ${
+                  selectedStock.change_percent >= 0 ? 'text-green-profit' : 'text-red-loss'
+                }`}>
+                  {selectedStock.change_percent >= 0 ? '+' : ''}{selectedStock.change_percent.toFixed(2)}%
+                </span>
+                <span className="text-dark-muted text-xs flex-shrink-0">Vol {fmtVolume(selectedStock.volume)}</span>
+              </div>
+              <span className="text-dark-muted text-xs leading-tight min-h-[1rem] block truncate">
+                {selectedStock.name !== selectedStock.symbol ? selectedStock.name : '\u00a0'}
               </span>
-            )}
-          </div>
-          {selectedStock && selectedStock.name !== selectedStock.symbol && (
-            <span className="text-dark-muted text-xs leading-tight">{selectedStock.name}</span>
+            </div>
           )}
         </div>
 
-        <div className="flex items-center gap-1 ml-auto">
+        <div className="flex items-center gap-1 flex-shrink-0">
           {periods.map((p) => (
             <button
               key={p}
