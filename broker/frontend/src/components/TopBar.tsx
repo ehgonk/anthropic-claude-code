@@ -1,17 +1,18 @@
 import { Menu, Settings, Bell, Database } from 'lucide-react'
-import type { Stock } from '../App'
 import ThemeSwitcher, { ThemeMode } from './ThemeSwitcher'
+import LayoutPicker, { GridLayout } from './LayoutPicker'
 
 interface TopBarProps {
-  selectedStock: Stock | null
   lastUpdateDate: string | null
   isUpdating: boolean
   updateMessage: string | null
   themeMode: ThemeMode
   onThemeChange: (theme: ThemeMode) => void
+  layout: GridLayout
+  onSelectLayout: (layout: GridLayout) => void
 }
 
-export default function TopBar({ selectedStock, lastUpdateDate, isUpdating, updateMessage, themeMode, onThemeChange }: TopBarProps) {
+export default function TopBar({ lastUpdateDate, isUpdating, updateMessage, themeMode, onThemeChange, layout, onSelectLayout }: TopBarProps) {
   return (
     <div className="h-12 bg-dark-card border-b border-dark-border flex items-center justify-between px-4">
       <div className="flex items-center gap-4">
@@ -21,22 +22,9 @@ export default function TopBar({ selectedStock, lastUpdateDate, isUpdating, upda
 
         <span className="text-lg font-bold text-dark-text">Dojima</span>
 
-        {selectedStock && (
-          <div className="flex items-center gap-3 ml-4 pl-4 border-l border-dark-border">
-            <div className="flex items-center gap-2">
-              <span className="text-dark-text font-semibold">{selectedStock.symbol}</span>
-              <span className="text-xl font-bold text-dark-text">
-                R$ {selectedStock.price.toFixed(2)}
-              </span>
-              <span className={`text-sm font-semibold ${
-                selectedStock.change_percent >= 0 ? 'text-green-profit' : 'text-red-loss'
-              }`}>
-                {selectedStock.change_percent >= 0 ? '+' : ''}
-                {selectedStock.change_percent.toFixed(2)}%
-              </span>
-            </div>
-          </div>
-        )}
+        <div className="ml-4 pl-4 border-l border-dark-border">
+          <LayoutPicker layout={layout} onSelect={onSelectLayout} />
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
@@ -68,8 +56,6 @@ export default function TopBar({ selectedStock, lastUpdateDate, isUpdating, upda
           <Bell className="w-4 h-4 text-dark-muted" />
         </button>
 
-        {/* Theme switcher */}
-        {(() => { console.log('📊 TopBar: About to render ThemeSwitcher'); return null; })()}
         <ThemeSwitcher currentTheme={themeMode} onThemeChange={onThemeChange} />
 
         <button className="p-2 hover:bg-dark-border rounded">

@@ -10,7 +10,7 @@ import LinesPanel from './components/LinesPanel'
 import WatchlistPanel from './components/WatchlistPanel'
 import LayersPanel from './components/LayersPanel'
 import DataSyncPanel from './components/DataSyncPanel'
-import LayoutPicker, { GridLayout, LAYOUTS } from './components/LayoutPicker'
+import { GridLayout, LAYOUTS } from './components/LayoutPicker'
 import type { ThemeMode } from './components/ThemeSwitcher'
 import api from './services/api'
 
@@ -223,12 +223,16 @@ function App() {
   return (
     <div className="flex flex-col h-screen bg-dark-bg">
       <TopBar
-        selectedStock={panels[activePanel].stock}
         lastUpdateDate={lastUpdateDate}
         isUpdating={isUpdating}
         updateMessage={updateMessage}
         themeMode={themeMode}
         onThemeChange={handleThemeChange}
+        layout={layout}
+        onSelectLayout={(l) => {
+          setLayout(l)
+          if (activePanel >= (l.panels?.length ?? l.cols * l.rows)) setActivePanel(0)
+        }}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -290,10 +294,10 @@ function App() {
         {activeTool === 'datasync' && <DataSyncPanel />}
 
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Layout control bar */}
-          <div className="flex items-center justify-between px-4 py-1 bg-dark-card border-b border-dark-border">
-            <div className="flex items-center gap-1 flex-wrap">
-              {totalPanels > 1 && Array.from({ length: totalPanels }).map((_, i) => (
+          {/* Panel tabs (only when multiple panels) */}
+          {totalPanels > 1 && (
+            <div className="flex items-center gap-1 px-4 py-1 bg-dark-card border-b border-dark-border flex-wrap">
+              {Array.from({ length: totalPanels }).map((_, i) => (
                 <button
                   key={i}
                   onClick={() => setActivePanel(i)}
@@ -307,12 +311,7 @@ function App() {
                 </button>
               ))}
             </div>
-            <LayoutPicker layout={layout} onSelect={(l) => {
-              setLayout(l)
-              // keep activePanel within bounds
-              if (activePanel >= (l.panels?.length ?? l.cols * l.rows)) setActivePanel(0)
-            }} />
-          </div>
+          )}
 
           {/* Chart panels */}
           <div

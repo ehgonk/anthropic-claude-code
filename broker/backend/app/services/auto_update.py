@@ -336,6 +336,9 @@ class AutoUpdateService:
                 stock.change_percent = stock_data.get('change_percent', 0)
                 stock.volume = stock_data.get('volume', 0)
                 stock.updated_at = datetime.utcnow()
+                # Atualiza nome se Yahoo Finance retornou um nome real (nao apenas o symbol)
+                if stock_data.get('name') and stock_data['name'] != symbol:
+                    stock.name = stock_data['name']
 
             for price_data in stock_data['prices']:
                 existing_row = (await db.execute(
