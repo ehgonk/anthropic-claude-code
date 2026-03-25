@@ -1,0 +1,85 @@
+// MVP Maps — Schema PostgreSQL + PostGIS + pgvector
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Entregas individuais (dados importados do Excel)
+model Delivery {
+  id        String   @id @default(cuid())
+  address   String
+  cep       String?  @db.VarChar(8)
+  city      String?  @db.VarChar(100)
+  state     String?  @db.VarChar(2)
+  lat       Decimal? @db.Decimal(10, 8)
+  lng       Decimal? @db.Decimal(11, 8)
+  h3Res5    String?  @db.VarChar(15)
+  h3Res6    String?  @db.VarChar(15)
+  h3Res7    String?  @db.VarChar(15)
+  quantity  Int      @default(1)
+  period    String?  // "2025-01", "2025-02", etc.
+  rawData   Json?    // dados originais do Excel
+  createdAt DateTime @default(now())
+
+  @@index([h3Res6])
+  @@index([cep])
+  @@map("deliveries")
+}
+
+/// Agregados por célula H3 (para performance do mapa e RAG)
+model DeliveryAggregate {
+  h3Index           String   @id @db.VarChar(15)
+  resolution        Int
+  deliveryCount     Int      @default(0)
+  uniqueAddresses   Int      @default(0)
+  totalQuantity     Int      @default(0)
+  centerLat         Decimal  @db.Decimal(10, 8)
+  centerLng         Decimal  @db.Decimal(11, 8)
+  populationDensity Decimal?
+  // embedding vector(256) — adicionado via migration SQL raw
+  updatedAt         DateTime @updatedAt
+
+  @@index([resolution])
+  @@map("delivery_aggregates")
+}
+
+/// Pontos de retirada (Correios, Clique Retire, manual)
+model PickupPoint {
+  id         String   @id @default(cuid())
+  name       String
+  provider   String   // "correios" | "clique_retire" | "manual"
+  externalId String?
+  address    String?
+  city       String?
+  state      String?  @db.VarChar(2)
+  lat        Decimal  @db.Decimal(10, 8)
+  lng        Decimal  @db.Decimal(11, 8)
+  h3Res7     String?  @db.VarChar(15)
+  type       String   // "agency" | "locker" | "partner"
+  metadata   Json?
+  isActive   Boolean  @default(true)
+  updatedAt  DateTime @updatedAt
+
+  @@index([provider])
+  @@index([state])
+  @@map("pickup_points")
+}
+
+/// Dados populacionais WorldPop (agregados por célula H3)
+model PopulationCell {
+  h3Index    String   @id @db.VarChar(15)
+  resolution Int
+  population Int
+  year       Int
+  centerLat  Decimal  @db.Decimal(10, 8)
+  centerLng  Decimal  @db.Decimal(11, 8)
+  updatedAt  DateTime @updatedAt
+
+  @@index([resolution])
+  @@map("population_cells")
+}
