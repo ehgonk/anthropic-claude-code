@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
+  "installCommand": "npm install",
+  "framework": "vite",
+  "devCommand": "cd frontend && npm run dev",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "http://localhost:8001/:path*"
+    }
+  ],
+  "env": {
+    "VITE_API_URL": "https://kobayashi-labs.vercel.app/api"
+  }
+}
