@@ -1,0 +1,30 @@
+services:
+  # Backend FastAPI
+  - type: web
+    name: broker-backend
+    runtime: docker
+    dockerfilePath: ./broker/backend/Dockerfile
+    dockerContext: ./broker/backend
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+      - key: PORT
+        value: 8001
+      - key: BROKER_CORS_ORIGINS
+        value: "*"
+    healthCheckPath: /api/health
+
+  # Frontend Vite/React
+  - type: web
+    name: broker-frontend
+    runtime: node
+    buildCommand: cd broker/frontend && npm install && npm run build
+    startCommand: cd broker/frontend && npm run preview -- --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: NODE_VERSION
+        value: 18
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: broker-backend
+          property: url
